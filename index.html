@@ -4,14 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#ffffff" />
-  <title>JJ Bank Accounts</title>
+  <title>Control de Cuentas</title>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="styles.css" />
-  <!-- Fuente para números (como JJ Portfolio) -->
+  <!-- Fuente para números (como en JJ Portfolio) -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body class="theme-light">
-
+<script>
+  window.onerror = function(message, source, lineno, colno, error) {
+    alert('Error JS: ' + message + '\nLínea: ' + lineno + '\nArchivo: ' + source);
+    return true;
+  };
+</script>
   <!-- Menú hamburguesa (inicialmente oculto) -->
   <nav id="menuLateral" class="menu-lateral oculto">
     <div class="menu-header">
