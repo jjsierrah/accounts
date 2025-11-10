@@ -1,6 +1,4 @@
 // app2.js
-// Parte 1B: Gestión de cuentas, saldo total y colores
-
 const COLORES_CUENTAS = [
   '#4A90E2', '#50C878', '#FF6F61', '#FFD700', '#9B59B6',
   '#1ABC9C', '#E74C3C', '#3498DB', '#2ECC71', '#F39C12',
@@ -111,12 +109,14 @@ function calcularSaldoTotal() {
     .reduce((sum, cuenta) => sum + (cuenta.saldo || 0), 0);
 }
 
-// Reemplazar renderizarTodo para incluir saldo
-const renderizarTodo_original = renderizarTodo;
-renderizarTodo = function() {
-  renderizarTodo_original();
-  renderizarListaCuentas();
-  if (elementos.saldoTotal) {
-    elementos.saldoTotal.textContent = formatearMoneda(calcularSaldoTotal());
-  }
-};
+// Extender renderizarTodo sin redefinir
+if (typeof renderizarTodo === 'function') {
+  const renderizarTodo_original = renderizarTodo;
+  renderizarTodo = function() {
+    renderizarTodo_original();
+    renderizarListaCuentas();
+    if (elementos.saldoTotal) {
+      elementos.saldoTotal.textContent = formatearMoneda(calcularSaldoTotal());
+    }
+  };
+}
