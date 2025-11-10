@@ -4,20 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#ffffff" />
-  <title>Control de Cuentas</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css" />
-  <!-- Fuente para números (como en JJ Portfolio) -->
+  <title>JJ Bank Accounts</title>
+  <link rel="manifest" href="manifest.json?v=3">
+  <link rel="stylesheet" href="styles.css?v=3" />
   <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body class="theme-light">
-<script>
-  window.onerror = function(message, source, lineno, colno, error) {
-    alert('Error JS: ' + message + '\nLínea: ' + lineno + '\nArchivo: ' + source);
-    return true;
-  };
-</script>
-  <!-- Menú hamburguesa (inicialmente oculto) -->
+
+  <!-- Menú hamburguesa -->
   <nav id="menuLateral" class="menu-lateral oculto">
     <div class="menu-header">
       <span>Menú</span>
@@ -35,10 +29,10 @@
     </ul>
   </nav>
 
-  <!-- Overlay para cerrar menú -->
+  <!-- Overlay -->
   <div id="overlay" class="overlay oculto"></div>
 
-  <!-- Botón hamburguesa fijo -->
+  <!-- Botón hamburguesa -->
   <button id="btnMenu" class="btn-hamburguesa">☰</button>
 
   <!-- Contenido principal -->
@@ -56,14 +50,11 @@
       </div>
     </div>
 
-    <!-- Desglose de rentabilidad por años (colapsable) -->
+    <!-- Desglose de rentabilidad -->
     <div class="seccion-rentabilidad">
       <h2 class="titulo-seccion">Rentabilidad</h2>
       <div id="resumenRentabilidad" class="resumen-rentabilidad">
-        <!-- Ejemplo visual (se generará dinámicamente):
-        <div class="item-anio"><strong>2025</strong>: +120,50 €</div>
-        <div class="item-anio"><strong>2024</strong>: +95,20 €</div>
-        -->
+        <!-- Se generará dinámicamente -->
       </div>
       <button id="btnVerDetalleRentabilidad" class="btn-desplegar">Ver detalle</button>
       <div id="detalleRentabilidad" class="detalle-rentabilidad oculto">
@@ -76,9 +67,6 @@
     <div id="listaCuentas" class="lista-cuentas">
       <!-- Las tarjetas se generarán dinámicamente -->
     </div>
-
-    <!-- Botón flotante (opcional, si no usas menú para alta) -->
-    <!-- <button id="btnNuevaCuentaFlotante" class="btn-flotante">+</button> -->
 
   </main>
 
@@ -195,9 +183,23 @@
     </div>
   </div>
 
-  <script src="app1.js" defer></script>
-  <script src="app2.js" defer></script>
-  <script src="app3.js" defer></script>
-  <script src="app4.js" defer></script>
+  <!-- Scripts -->
+  <script src="app1.js?v=3" defer></script>
+  <script src="app2.js?v=3" defer></script>
+  <script src="app3.js?v=3" defer></script>
+  <script src="app4.js?v=3" defer></script>
+
+  <!-- Inicialización única al final -->
+  <script>
+    window.addEventListener('load', () => {
+      if (typeof iniciarApp === 'function') {
+        iniciarApp();
+      } else {
+        alert('Error: No se pudo cargar la aplicación. Por favor, recarga la página.');
+        console.error('❌ iniciarApp no está definida. Algunos scripts no se cargaron.');
+      }
+    });
+  </script>
+
 </body>
 </html>
