@@ -1,6 +1,4 @@
 // app1.js
-// Parte 1A: Inicialización, menú, tema y utilidades básicas
-
 let estado = {
   cuentas: [],
   rendimientos: [],
