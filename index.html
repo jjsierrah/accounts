@@ -3,171 +3,72 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#ffffff" />
   <title>JJ Bank Accounts</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* Estilos mínimos para ver que funciona */
+    body { font-family: sans-serif; padding: 20px; }
+    .btn-hamburguesa { position: fixed; top: 16px; left: 16px; font-size: 24px; background: #1a73e8; color: white; border: none; width: 44px; height: 44px; border-radius: 50%; }
+    #menuLateral { position: fixed; top: 0; left: -300px; width: 280px; height: 100%; background: white; transition: left 0.3s; padding-top: 60px; }
+    #menuLateral.visible { left: 0; }
+    #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); }
+    #overlay.visible { display: block; }
+  </style>
 </head>
-<body class="theme-light">
+<body>
 
-  <!-- Todo tu HTML igual que antes -->
+  <button id="btnMenu" class="btn-hamburguesa">☰</button>
 
-  <!-- Menú hamburguesa -->
-  <nav id="menuLateral" class="menu-lateral oculto">
-    <div class="menu-header">
-      <span>Menú</span>
-      <button id="cerrarMenu" class="btn-cerrar">×</button>
-    </div>
-    <ul class="menu-lista">
-      <li><a href="#" data-accion="inicio">Inicio</a></li>
+  <nav id="menuLateral">
+    <ul>
       <li><a href="#" data-accion="nueva-cuenta">Añadir cuenta</a></li>
-      <li><a href="#" data-accion="nuevo-rendimiento">Añadir rendimiento</a></li>
-      <li><a href="#" data-accion="ordenar">Ordenar lista</a></li>
-      <li><a href="#" data-accion="importar">Importar datos</a></li>
-      <li><a href="#" data-accion="exportar">Exportar datos</a></li>
-      <li><a href="#" data-accion="cambiar-tema">Cambiar tema</a></li>
-      <li><a href="#" data-accion="ayuda">Ayuda</a></li>
     </ul>
   </nav>
 
-  <div id="overlay" class="overlay oculto"></div>
-  <button id="btnMenu" class="btn-hamburguesa">☰</button>
+  <div id="overlay"></div>
 
-  <main id="contenidoPrincipal" class="contenido-principal">
-    <div class="panel-resumen">
-      <div class="resumen-item">
-        <div class="resumen-label">Saldo total</div>
-        <div class="resumen-valor" id="saldoTotal">0,00 €</div>
-      </div>
-      <div class="resumen-item">
-        <div class="resumen-label">Rentabilidad total <span>(Neto)</span></div>
-        <div class="resumen-valor" id="rentabilidadTotal">0,00 €</div>
-      </div>
-    </div>
+  <div id="listaCuentas">
+    <p>Esperando carga de la app...</p>
+  </div>
 
-    <div class="seccion-rentabilidad">
-      <h2 class="titulo-seccion">Rentabilidad</h2>
-      <div id="resumenRentabilidad" class="resumen-rentabilidad"></div>
-      <button id="btnVerDetalleRentabilidad" class="btn-desplegar">Ver detalle</button>
-      <div id="detalleRentabilidad" class="detalle-rentabilidad oculto"></div>
-    </div>
-
-    <div class="titulo-seccion">Mis cuentas</div>
-    <div id="listaCuentas" class="lista-cuentas"></div>
-  </main>
-
-  <!-- Modales (igual que antes, omitidos por brevedad, pero deben estar completos) -->
-  <!-- Asegúrate de que los modales estén en el HTML -->
-
-  <!-- Script único al final -->
+  <!-- TODO EL JAVASCRIPT EN UN SOLO BLOQUE -->
   <script>
-    // ============ app COMBINADO ============
+    // Estado y funciones mínimas
     let estado = {
-      cuentas: JSON.parse(localStorage.getItem('controlCuentas_cuentas') || '[]'),
-      rendimientos: JSON.parse(localStorage.getItem('controlCuentas_rendimientos') || '[]'),
-      temaOscuro: JSON.parse(localStorage.getItem('controlCuentas_temaOscuro') || 'false')
+      cuentas: JSON.parse(localStorage.getItem('cuentas') || '[]')
     };
 
-    // Guardar datos
-    function guardarDatos() {
-      localStorage.setItem('controlCuentas_cuentas', JSON.stringify(estado.cuentas));
-      localStorage.setItem('controlCuentas_rendimientos', JSON.stringify(estado.rendimientos));
-      localStorage.setItem('controlCuentas_temaOscuro', JSON.stringify(estado.temaOscuro));
+    function cerrarTodo() {
+      document.getElementById('menuLateral').classList.remove('visible');
+      document.getElementById('overlay').classList.remove('visible');
     }
 
-    // Formatear moneda
-    function formatearMoneda(valor) {
-      if (valor == null) return '0,00 €';
-      return valor.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-    }
-
-    // Aplicar tema
-    function aplicarTema() {
-      if (estado.temaOscuro) {
-        document.body.classList.add('theme-dark');
-      } else {
-        document.body.classList.remove('theme-dark');
-      }
-    }
-
-    // Cerrar modales
-    function cerrarTodosLosModales() {
-      document.querySelectorAll('.modal').forEach(m => m.classList.remove('visible'));
-      document.getElementById('overlay')?.classList.remove('visible');
-      document.getElementById('menuLateral')?.classList.remove('visible');
-    }
-
-    // Abrir modal
-    function abrirModal(id) {
-      cerrarTodosLosModales();
-      document.getElementById(id)?.classList.add('visible');
-      document.getElementById('overlay')?.classList.add('visible');
-    }
-
-    // === Renderizado ===
-    function renderizarListaCuentas() {
-      const lista = document.getElementById('listaCuentas');
-      if (!lista) return;
+    function iniciarApp() {
+      // Simular carga
+      document.getElementById('listaCuentas').innerHTML = '<p>✅ App funcionando. Menú interactivo.</p>';
       
-      const cuentas = [...estado.cuentas].sort((a, b) => 
-        a.banco.localeCompare(b.banco) || a.tipo.localeCompare(b.tipo)
-      );
+      // Eventos
+      document.getElementById('btnMenu').onclick = () => {
+        document.getElementById('menuLateral').classList.add('visible');
+        document.getElementById('overlay').classList.add('visible');
+      };
+
+      document.getElementById('overlay').onclick = cerrarTodo;
       
-      lista.innerHTML = cuentas.length ? '' : '<p>No hay cuentas registradas.</p>';
-      
-      cuentas.forEach(c => {
-        const div = document.createElement('div');
-        div.className = 'tarjeta-cuenta';
-        div.innerHTML = `
-          <div class="titular-cuenta">${c.titular}</div>
-          ${c.titular2 ? `<div class="titular-secundario">${c.titular2}</div>` : ''}
-          <div class="banco-cuenta">${c.banco}</div>
-          <div class="tipo-cuenta">${c.tipo}</div>
-          <div class="saldo-cuenta">${formatearMoneda(c.saldo)}</div>
-        `;
-        lista.appendChild(div);
-      });
-    }
-
-    function calcularSaldoTotal() {
-      return estado.cuentas.filter(c => c.activa !== false).reduce((s, c) => s + (c.saldo || 0), 0);
-    }
-
-    function renderizarTodo() {
-      aplicarTema();
-      renderizarListaCuentas();
-      document.getElementById('saldoTotal').textContent = formatearMoneda(calcularSaldoTotal());
-      document.getElementById('rentabilidadTotal').textContent = '0,00 €'; // placeholder
-    }
-
-    // === Eventos ===
-    document.addEventListener('DOMContentLoaded', () => {
-      // Botón menú
-      document.getElementById('btnMenu')?.addEventListener('click', () => {
-        document.getElementById('menuLateral')?.classList.add('visible');
-        document.getElementById('overlay')?.classList.add('visible');
-      });
-
-      document.getElementById('cerrarMenu')?.addEventListener('click', cerrarTodosLosModales);
-      document.getElementById('overlay')?.addEventListener('click', cerrarTodosLosModales);
-
-      // Menú acciones
-      document.querySelectorAll('[data-accion]').forEach(item => {
-        item.addEventListener('click', (e) => {
+      document.querySelectorAll('[data-accion]').forEach(el => {
+        el.onclick = (e) => {
           e.preventDefault();
-          const accion = e.target.dataset.accion || e.target.parentElement?.dataset.accion;
-          cerrarTodosLosModales();
-          if (accion === 'nueva-cuenta') {
-            alert('Función de prueba: Añadir cuenta');
-          }
-        });
+          cerrarTodo();
+          alert('¡Funciona! Has hecho clic en: ' + el.dataset.accion);
+        };
       });
+    }
 
-      // Inicializar
-      renderizarTodo();
-      console.log('✅ App cargada correctamente');
-    });
+    // Ejecutar SOLO cuando el DOM esté listo
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', iniciarApp);
+    } else {
+      iniciarApp();
+    }
   </script>
 
 </body>
