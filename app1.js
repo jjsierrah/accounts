@@ -62,3 +62,91 @@ function alternarTema() {
   estado.temaOscuro = !estado.temaOscuro;
   aplicarTema();
   guardarDatos();
+}
+
+function formatearMoneda(valor) {
+  if (valor == null) return '0,00 €';
+  return valor.toLocaleString('es-ES', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }) + ' €';
+}
+
+function cerrarTodosLosModales() {
+  elementos.modalCuenta?.classList.remove('visible');
+  elementos.modalRendimiento?.classList.remove('visible');
+  elementos.modalAyuda?.classList.remove('visible');
+  elementos.overlay?.classList.remove('visible');
+}
+
+function abrirModal(modal) {
+  cerrarTodosLosModales();
+  modal?.classList.add('visible');
+  elementos.overlay?.classList.add('visible');
+}
+
+function inicializarEventos() {
+  elementos.btnMenu?.addEventListener('click', () => {
+    elementos.menuLateral?.classList.add('visible');
+    elementos.overlay?.classList.add('visible');
+  });
+
+  elementos.cerrarMenu?.addEventListener('click', () => {
+    elementos.menuLateral?.classList.remove('visible');
+    elementos.overlay?.classList.remove('visible');
+  });
+
+  elementos.overlay?.addEventListener('click', () => {
+    elementos.menuLateral?.classList.remove('visible');
+    cerrarTodosLosModales();
+    elementos.overlay?.classList.remove('visible');
+  });
+
+  document.querySelectorAll('.btn-cerrar-modal').forEach(btn => {
+    btn.addEventListener('click', cerrarTodosLosModales);
+  });
+
+  document.querySelectorAll('[data-accion]').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const accion = e.target.dataset.accion || e.target.parentElement?.dataset.accion;
+      
+      cerrarTodosLosModales();
+      elementos.menuLateral?.classList.remove('visible');
+      elementos.overlay?.classList.remove('visible');
+
+      switch (accion) {
+        case 'nueva-cuenta':
+          document.getElementById('tituloModalCuenta').textContent = 'Añadir cuenta';
+          document.getElementById('formCuenta')?.reset();
+          document.getElementById('cuentaId').value = '';
+          abrirModal(elementos.modalCuenta);
+          break;
+        case 'nuevo-rendimiento':
+          // Se completará en app3.js
+          break;
+        case 'cambiar-tema':
+          alternarTema();
+          break;
+        case 'ayuda':
+          abrirModal(elementos.modalAyuda);
+          break;
+      }
+    });
+  });
+
+  if (elementos.btnVerDetalleRentabilidad) {
+    elementos.btnVerDetalleRentabilidad.addEventListener('click', () => {
+      elementos.detalleRentabilidad?.classList.toggle('oculto');
+      elementos.btnVerDetalleRentabilidad.textContent = 
+        elementos.detalleRentabilidad?.classList.contains('oculto') ? 'Ver detalle' : 'Ocultar detalle';
+    });
+  }
+}
+
+// Ejecutar solo cuando el DOM esté listo
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', iniciarApp);
+} else {
+  iniciarApp();
+}
