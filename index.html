@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Control de Cuentas</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Fuente para números (como en JJ Portfolio) -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="theme-light">
+
+  <!-- Menú hamburguesa (inicialmente oculto) -->
+  <nav id="menuLateral" class="menu-lateral oculto">
+    <div class="menu-header">
+      <span>Menú</span>
+      <button id="cerrarMenu" class="btn-cerrar">×</button>
+    </div>
+    <ul class="menu-lista">
+      <li><a href="#" data-accion="inicio">Inicio</a></li>
+      <li><a href="#" data-accion="nueva-cuenta">Añadir cuenta</a></li>
+      <li><a href="#" data-accion="nuevo-rendimiento">Añadir rendimiento</a></li>
+      <li><a href="#" data-accion="ordenar">Ordenar lista</a></li>
+      <li><a href="#" data-accion="importar">Importar datos</a></li>
+      <li><a href="#" data-accion="exportar">Exportar datos</a></li>
+      <li><a href="#" data-accion="cambiar-tema">Cambiar tema</a></li>
+      <li><a href="#" data-accion="ayuda">Ayuda</a></li>
+    </ul>
+  </nav>
+
+  <!-- Overlay para cerrar menú -->
+  <div id="overlay" class="overlay oculto"></div>
+
+  <!-- Botón hamburguesa fijo -->
+  <button id="btnMenu" class="btn-hamburguesa">☰</button>
+
+  <!-- Contenido principal -->
+  <main id="contenidoPrincipal" class="contenido-principal">
+
+    <!-- Resumen superior -->
+    <div class="panel-resumen">
+      <div class="resumen-item">
+        <div class="resumen-label">Saldo total</div>
+        <div class="resumen-valor" id="saldoTotal">0,00 €</div>
+      </div>
+      <div class="resumen-item">
+        <div class="resumen-label">Rentabilidad total <span>(Neto)</span></div>
+        <div class="resumen-valor" id="rentabilidadTotal">0,00 €</div>
+      </div>
+    </div>
+
+    <!-- Desglose de rentabilidad por años (colapsable) -->
+    <div class="seccion-rentabilidad">
+      <h2 class="titulo-seccion">Rentabilidad</h2>
+      <div id="resumenRentabilidad" class="resumen-rentabilidad">
+        <!-- Ejemplo visual (se generará dinámicamente):
+        <div class="item-anio"><strong>2025</strong>: +120,50 €</div>
+        <div class="item-anio"><strong>2024</strong>: +95,20 €</div>
+        -->
+      </div>
+      <button id="btnVerDetalleRentabilidad" class="btn-desplegar">Ver detalle</button>
+      <div id="detalleRentabilidad" class="detalle-rentabilidad oculto">
+        <!-- Se rellenará con JS -->
+      </div>
+    </div>
+
+    <!-- Lista de cuentas -->
+    <div class="titulo-seccion">Mis cuentas</div>
+    <div id="listaCuentas" class="lista-cuentas">
+      <!-- Las tarjetas se generarán dinámicamente -->
+    </div>
+
+    <!-- Botón flotante (opcional, si no usas menú para alta) -->
+    <!-- <button id="btnNuevaCuentaFlotante" class="btn-flotante">+</button> -->
+
+  </main>
+
+  <!-- Modal: Nueva / Editar Cuenta -->
+  <div id="modalCuenta" class="modal oculto">
+    <div class="modal-contenido">
+      <div class="modal-header">
+        <h3 id="tituloModalCuenta">Añadir cuenta</h3>
+        <button class="btn-cerrar-modal">×</button>
+      </div>
+      <form id="formCuenta">
+        <input type="hidden" id="cuentaId">
+        <div class="campo-form">
+          <label for="banco">Entidad bancaria *</label>
+          <input type="text" id="banco" required>
+        </div>
+        <div class="campo-form">
+          <label for="tipoCuenta">Tipo de cuenta *</label>
+          <input type="text" id="tipoCuenta" required>
+        </div>
+        <div class="campo-form">
+          <label for="titular">Titular *</label>
+          <input type="text" id="titular" required>
+        </div>
+        <div class="campo-form">
+          <label for="titular2">Titular adicional (opcional)</label>
+          <input type="text" id="titular2">
+        </div>
+        <div class="campo-form">
+          <label for="saldo">Saldo (€)</label>
+          <input type="number" id="saldo" step="0.01" min="0">
+        </div>
+        <div class="campo-form check">
+          <label>
+            <input type="checkbox" id="cuentaActiva" checked> Cuenta activa
+          </label>
+        </div>
+        <div class="acciones-modal">
+          <button type="submit" class="btn-guardar">Guardar</button>
+          <button type="button" class="btn-cancelar">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Nuevo / Editar Rendimiento -->
+  <div id="modalRendimiento" class="modal oculto">
+    <div class="modal-contenido">
+      <div class="modal-header">
+        <h3 id="tituloModalRendimiento">Añadir rendimiento</h3>
+        <button class="btn-cerrar-modal">×</button>
+      </div>
+      <form id="formRendimiento">
+        <input type="hidden" id="rendimientoId">
+        <div class="campo-form">
+          <label for="cuentaRendimiento">Cuenta *</label>
+          <select id="cuentaRendimiento" required>
+            <!-- Se rellenará con JS -->
+          </select>
+        </div>
+        <div class="campo-form">
+          <label for="fechaRendimiento">Fecha *</label>
+          <input type="date" id="fechaRendimiento" required>
+        </div>
+        <div class="campo-form">
+          <label for="conceptoRendimiento">Concepto *</label>
+          <input type="text" id="conceptoRendimiento" required>
+        </div>
+        <div class="campo-form">
+          <label for="importeBruto">Importe bruto (€) *</label>
+          <input type="number" id="importeBruto" step="0.01" required>
+        </div>
+        <div class="campo-form">
+          <label for="tipoRendimiento">Tipo *</label>
+          <select id="tipoRendimiento" required>
+            <option value="interes">Interés</option>
+            <option value="comision">Comisión</option>
+            <option value="bonificacion">Bonificación</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="campo-form check">
+          <label>
+            <input type="checkbox" id="aplicarRetencion"> Aplicar retención del 19% (solo para intereses)
+          </label>
+        </div>
+        <div class="acciones-modal">
+          <button type="submit" class="btn-guardar">Guardar</button>
+          <button type="button" class="btn-cancelar">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Ayuda -->
+  <div id="modalAyuda" class="modal oculto">
+    <div class="modal-contenido">
+      <div class="modal-header">
+        <h3>Ayuda</h3>
+        <button class="btn-cerrar-modal">×</button>
+      </div>
+      <div class="modal-cuerpo">
+        <p>Esta aplicación te permite gestionar tus cuentas bancarias y sus rendimientos.</p>
+        <ul>
+          <li><strong>Añadir cuenta</strong>: registra una nueva cuenta con titular(es) y saldo.</li>
+          <li><strong>Añadir rendimiento</strong>: registra intereses, comisiones o bonificaciones.</li>
+          <li>La rentabilidad se muestra en <strong>neto</strong> (con retención del 19% para intereses).</li>
+          <li>Puedes <strong>importar/exportar</strong> tus datos en formato JSON.</li>
+        </ul>
+      </div>
+      <div class="acciones-modal centrado">
+        <button class="btn-cancelar">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app1.js" defer></script>
+  <script src="app2.js" defer></script>
+  <script src="app3.js" defer></script>
+  <script src="app4.js" defer></script>
+</body>
+</html>
