@@ -1,14 +1,12 @@
-/* ===== VARIABLES DE TEMA ===== */
+/* styles.css - Versión mínima funcional */
+
 :root {
-  /* Tema claro (por defecto) */
   --bg: #ffffff;
   --bg-secondary: #f8f9fa;
   --text: #212529;
   --text-secondary: #6c757d;
   --border: #dee2e6;
   --accent: #0d6efd;
-  --success: #198754;
-  --danger: #dc3545;
   --menu-bg: #ffffff;
   --modal-bg: #ffffff;
   --card-border: #e0e0e0;
@@ -22,15 +20,12 @@
   --text-secondary: #aaa;
   --border: #333;
   --accent: #4dabf7;
-  --success: #40c057;
-  --danger: #ff6b6b;
   --menu-bg: #2d2d2d;
   --modal-bg: #252525;
   --card-border: #333;
   --overlay-bg: rgba(0, 0, 0, 0.6);
 }
 
-/* ===== RESET Y BASE ===== */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -45,7 +40,6 @@ body {
   transition: background-color 0.3s, color 0.3s;
 }
 
-/* ===== BOTÓN HAMBURGUESA ===== */
 .btn-hamburguesa {
   position: fixed;
   top: 16px;
@@ -64,7 +58,6 @@ body {
   justify-content: center;
 }
 
-/* ===== MENÚ LATERAL ===== */
 .menu-lateral {
   position: fixed;
   top: 0;
@@ -133,7 +126,6 @@ body {
   background-color: var(--bg-secondary);
 }
 
-/* ===== OVERLAY ===== */
 .overlay {
   position: fixed;
   top: 0;
@@ -152,14 +144,12 @@ body {
   visibility: visible;
 }
 
-/* ===== CONTENIDO PRINCIPAL ===== */
 .contenido-principal {
   padding: 20px 16px 80px 16px;
   max-width: 800px;
   margin: 0 auto;
 }
 
-/* ===== PANEL RESUMEN (superior) ===== */
 .panel-resumen {
   display: flex;
   justify-content: space-between;
@@ -192,7 +182,6 @@ body {
   font-family: 'Roboto Mono', monospace;
 }
 
-/* ===== SECCIÓN RENTABILIDAD ===== */
 .titulo-seccion {
   font-size: 20px;
   margin: 24px 0 16px 0;
@@ -241,7 +230,6 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-/* ===== LISTA DE CUENTAS ===== */
 .lista-cuentas {
   display: flex;
   flex-direction: column;
@@ -264,7 +252,7 @@ body {
   top: 0;
   bottom: 0;
   width: 6px;
-  background-color: var(--color-borde); /* Se inyectará por JS */
+  background-color: var(--color-borde);
   border-radius: 6px 0 0 6px;
 }
 
@@ -298,7 +286,6 @@ body {
   font-family: 'Roboto Mono', monospace;
 }
 
-/* ===== MODALES ===== */
 .modal {
   position: fixed;
   top: 0;
@@ -425,12 +412,10 @@ body {
   color: var(--text);
 }
 
-/* ===== UTILIDADES ===== */
 .oculto {
   display: none !important;
 }
 
-/* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .panel-resumen {
     flex-direction: column;
