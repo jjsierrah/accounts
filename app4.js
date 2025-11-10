@@ -1,6 +1,4 @@
 // app4.js
-// Parte 3: Importar, exportar, edición de rendimientos y menú completo
-
 function exportarDatos() {
   const datos = {
     cuentas: estado.cuentas,
@@ -65,21 +63,23 @@ function editarRendimiento(rendimiento) {
 }
 
 // Reemplazar renderizarDetalleRentabilidad para hacerlo editable
-const renderizarDetalleRentabilidad_original = renderizarDetalleRentabilidad;
-renderizarDetalleRentabilidad = function() {
-  renderizarDetalleRentabilidad_original();
-  if (!elementos.detalleRentabilidad) return;
-  const lineas = elementos.detalleRentabilidad.children;
-  for (let i = 0; i < lineas.length; i++) {
-    const r = [...estado.rendimientos].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[i];
-    if (r) {
-      lineas[i].style.cursor = 'pointer';
-      lineas[i].title = 'Hacer clic para editar';
-      const clickHandler = () => editarRendimiento(r);
-      lineas[i].addEventListener('click', clickHandler);
+if (typeof renderizarDetalleRentabilidad === 'function') {
+  const renderizarDetalleRentabilidad_original = renderizarDetalleRentabilidad;
+  renderizarDetalleRentabilidad = function() {
+    renderizarDetalleRentabilidad_original();
+    if (!elementos.detalleRentabilidad) return;
+    const lineas = elementos.detalleRentabilidad.children;
+    for (let i = 0; i < lineas.length; i++) {
+      const r = [...estado.rendimientos].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[i];
+      if (r) {
+        lineas[i].style.cursor = 'pointer';
+        lineas[i].title = 'Hacer clic para editar';
+        const clickHandler = () => editarRendimiento(r);
+        lineas[i].addEventListener('click', clickHandler);
+      }
     }
-  }
-};
+  };
+}
 
 // Completar el menú con importar, exportar y ordenar
 document.querySelectorAll('[data-accion="importar"]').forEach(item => {
