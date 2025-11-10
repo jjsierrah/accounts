@@ -155,9 +155,3 @@ function inicializarEventos() {
     });
   }
 }
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', iniciarApp);
-} else {
-  iniciarApp();
-}
