@@ -109,7 +109,7 @@ function calcularSaldoTotal() {
     .reduce((sum, cuenta) => sum + (cuenta.saldo || 0), 0);
 }
 
-// Extender renderizarTodo sin redefinir
+// Extender renderizarTodo sinn redefinir
 if (typeof renderizarTodo === 'function') {
   const renderizarTodo_original = renderizarTodo;
   renderizarTodo = function() {
