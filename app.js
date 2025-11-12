@@ -1,7 +1,7 @@
 // --- IndexedDB ---
 const db = new Dexie('JJBankAccountsDB');
 db.version(1).stores({
-  accounts: '++id, bank, description, holder, holder2, currentBalance, note',
+  accounts: '++id, bank, description, holder, holder2, currentBalance, note, color, accountNumber', // <-- Añadido color y accountNumber
   returns: '++id, accountId, amount, date, returnType, note'
 });
 
@@ -173,13 +173,14 @@ async function renderAccountsSummary() {
         }
         html += `</strong></div>`;
 
+        // Por año (siempre visible)
         const byYear = {};
         for (const r of list) {
           const year = new Date(r.date).getFullYear();
           if (!byYear[year]) byYear[year] = 0;
           byYear[year] += r.amount;
         }
-        if (Object.keys(byYear).length > 1) {
+        if (Object.keys(byYear).length > 0) { // Mostrar siempre si hay años
           html += `<div class="dividends-by-year">`;
           const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
           for (const year of sortedYears) {
@@ -194,6 +195,7 @@ async function renderAccountsSummary() {
           html += `</div>`;
         }
 
+        // Botón detalle
         html += `
           <button id="toggle${title.replace(/\s+/g, '')}Detail" class="btn-primary" style="margin-top:12px; padding:10px; font-size:0.95rem; width:auto;">
             Ver detalle
@@ -227,13 +229,15 @@ async function renderAccountsSummary() {
       fullHtml += processType(interests, 'Intereses recibidos', false);
     }
 
-    // --- LISTADO DE CUENTAS (SIN BOTONES DE EDICIÓN) ---
+    // --- LISTADO DE CUENTAS ---
     fullHtml += `<div class="group-title">Cuentas</div>`;
     accounts.forEach(acc => {
       const holderLine = acc.holder2 ? `${acc.holder}<br><small>Titular 2: ${acc.holder2}</small>` : acc.holder;
+      const colorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
       fullHtml += `
-        <div class="asset-item">
+        <div class="asset-item" style="${colorStyle}">
           <strong>${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
+          ${acc.accountNumber ? `Nº Cuenta: ${acc.accountNumber}<br>` : ''}
           Titular: ${holderLine}<br>
           Saldo: ${formatCurrency(acc.currentBalance)}<br>
           ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
@@ -281,6 +285,10 @@ async function showAddAccountForm() {
       <input type="text" id="description" placeholder="Ej: Cuenta nómina, Ahorros..." />
     </div>
     <div class="form-group">
+      <label>Nº de Cuenta (IBAN):</label>
+      <input type="text" id="accountNumber" placeholder="Ej: ES12 1234 5678 9012 3456 7890" />
+    </div>
+    <div class="form-group">
       <label>Titular principal:</label>
       <input type="text" id="holder" required />
     </div>
@@ -293,6 +301,10 @@ async function showAddAccountForm() {
       <input type="number" id="currentBalance" step="any" min="0" required />
     </div>
     <div class="form-group">
+      <label>Color de tarjeta:</label>
+      <input type="color" id="color" value="#1a73e8" />
+    </div>
+    <div class="form-group">
       <label>Nota:</label>
       <input type="text" id="note" placeholder="Ej: Cuenta personal, Negocio..." />
     </div>
@@ -302,47 +314,59 @@ async function showAddAccountForm() {
   document.getElementById('btnSaveAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
+    const accountNumber = document.getElementById('accountNumber').value.trim() || null;
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
-    const note = document.getElementById('note').value.trim() || 'General';
+    const color = document.getElementById('color').value;
+    const note = document.getElementById('note').value.trim() || null;
     if (!bank || !holder || isNaN(currentBalance)) {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
-    await db.accounts.add({ bank, description, holder, holder2, currentBalance, note });
+    await db.accounts.add({ bank, description, accountNumber, holder, holder2, currentBalance, color, note });
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
 }
 
-async function showEditAccountForm() {
+async function showAccountList() {
   const accounts = await db.accounts.toArray();
   if (accounts.length === 0) {
-    showToast('No hay cuentas para editar.');
+    openModal('Cuentas', '<p>No hay cuentas. Añade una desde el menú.</p>');
     return;
   }
-  if (accounts.length === 1) {
-    openEditAccountForm(accounts[0]);
-    return;
-  }
-  const options = accounts.map(a => {
-    const display = `${a.bank}${a.description ? ` (${a.description})` : ''}`;
-    return `<option value="${a.id}">${display}</option>`;
-  }).join('');
-  const form = `
-    <div class="form-group">
-      <label>Selecciona cuenta:</label>
-      <select id="editAccountId">${options}</select>
-    </div>
-    <button id="btnSelectAccount" class="btn-primary">Editar</button>
-  `;
-  openModal('Editar Cuenta', form);
-  document.getElementById('btnSelectAccount').onclick = async () => {
-    const id = parseInt(document.getElementById('editAccountId').value);
-    const acc = accounts.find(a => a.id === id);
-    if (acc) {
-      document.getElementById('modalOverlay').style.display = 'none';
+  let html = '<h3>Cuentas</h3>';
+  accounts.forEach(acc => {
+    const colorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+    html += `
+      <div class="asset-item" style="${colorStyle}">
+        <strong>${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
+        ${acc.accountNumber ? `Nº Cuenta: ${acc.accountNumber}<br>` : ''}
+        Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
+        Saldo: ${formatCurrency(acc.currentBalance)}<br>
+        ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
+        <div class="modal-actions">
+          <button class="btn-edit" data-id="${acc.id}">Editar</button>
+          <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
+        </div>
+      </div>
+    `;
+  });
+  openModal('Cuentas', html);
+  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
+    if (e.target.classList.contains('btn-delete')) {
+      const id = parseInt(e.target.dataset.id);
+      showConfirm('¿Eliminar esta cuenta y sus rendimientos?', async () => {
+        await db.accounts.delete(id);
+        await db.returns.where('accountId').equals(id).delete();
+        showAccountList(); // Actualiza la lista
+      });
+    }
+    if (e.target.classList.contains('btn-edit')) {
+      const id = parseInt(e.target.dataset.id);
+      const acc = await db.accounts.get(id);
+      if (!acc) return;
       openEditAccountForm(acc);
     }
   };
@@ -359,6 +383,10 @@ async function openEditAccountForm(acc) {
       <input type="text" id="description" value="${acc.description || ''}" />
     </div>
     <div class="form-group">
+      <label>Nº de Cuenta (IBAN):</label>
+      <input type="text" id="accountNumber" value="${acc.accountNumber || ''}" />
+    </div>
+    <div class="form-group">
       <label>Titular principal:</label>
       <input type="text" id="holder" value="${acc.holder}" required />
     </div>
@@ -371,8 +399,12 @@ async function openEditAccountForm(acc) {
       <input type="number" id="currentBalance" step="any" min="0" value="${acc.currentBalance}" required />
     </div>
     <div class="form-group">
+      <label>Color de tarjeta:</label>
+      <input type="color" id="color" value="${acc.color || '#1a73e8'}" />
+    </div>
+    <div class="form-group">
       <label>Nota:</label>
-      <input type="text" id="note" value="${acc.note || 'General'}" />
+      <input type="text" id="note" value="${acc.note || ''}" />
     </div>
     <button id="btnUpdateAccount" class="btn-primary">Guardar Cambios</button>
   `;
@@ -380,15 +412,17 @@ async function openEditAccountForm(acc) {
   document.getElementById('btnUpdateAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
+    const accountNumber = document.getElementById('accountNumber').value.trim() || null;
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
-    const note = document.getElementById('note').value.trim() || 'General';
+    const color = document.getElementById('color').value;
+    const note = document.getElementById('note').value.trim() || null;
     if (!bank || !holder || isNaN(currentBalance)) {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
-    await db.accounts.update(acc.id, { bank, description, holder, holder2, currentBalance, note });
+    await db.accounts.update(acc.id, { bank, description, accountNumber, holder, holder2, currentBalance, color, note });
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
@@ -432,7 +466,6 @@ async function showAddReturnForm() {
   `;
   openModal('Añadir Rendimiento', form);
 
-  // CORRECCIÓN AQUÍ
   document.getElementById('btnSaveReturn').onclick = async () => {
     const accountId = parseInt(document.getElementById('returnAccount').value);
     const returnType = document.getElementById('returnType').value;
@@ -440,23 +473,20 @@ async function showAddReturnForm() {
     const date = document.getElementById('returnDate').value;
     const note = document.getElementById('returnNote').value.trim() || null;
 
-    // Verificar que el importe sea un número positivo
     const amount = parseFloat(amountStr);
     if (isNaN(amount) || amount <= 0) {
       showToast('Importe inválido.');
       return;
     }
 
-    // Verificar que la fecha no sea futura
     if (!isDateValidAndNotFuture(date)) {
       showToast('La fecha no puede ser futura.');
       return;
     }
 
-    // Si pasa las validaciones, guarda el rendimiento
     await db.returns.add({ accountId, amount, date, returnType, note });
     document.getElementById('modalOverlay').style.display = 'none';
-    renderAccountsSummary(); // Actualiza el resumen
+    renderAccountsSummary();
     showToast('✅ Rendimiento añadido correctamente.');
   };
 }
@@ -578,7 +608,7 @@ function initMenu() {
           </div>
           <ul class="drawer-menu">
             <li><button data-action="add-account"><span>➕ Añadir Cuenta</span></button></li>
-            <li><button data-action="edit-account"><span>✏️ Editar Cuenta</span></button></li>
+            <li><button data-action="view-accounts"><span>🏦 Cuentas</span></button></li>
             <li><button data-action="add-return"><span>💰 Añadir Rendimiento</span></button></li>
             <li><button data-action="view-returns"><span>📊 Rendimientos</span></button></li>
             <li><button data-action="import-export"><span>📤 Exportar / Importar</span></button></li>
@@ -595,7 +625,7 @@ function initMenu() {
           drawer.style.display = 'none';
           const a = btn.dataset.action;
           if (a === 'add-account') showAddAccountForm();
-          else if (a === 'edit-account') showEditAccountForm();
+          else if (a === 'view-accounts') showAccountList(); // Cambiado a mostrar lista
           else if (a === 'add-return') showAddReturnForm();
           else if (a === 'view-returns') showReturnsList();
           else if (a === 'import-export') showImportExport();
@@ -674,13 +704,15 @@ function showImportExport() {
 // --- AYUDA ---
 function showHelp() {
   const content = `
-    <h3>Ayuda - JJ Bank accounts</h3>
+    <h3>Ayuda - JJ Bank Accounts</h3>
     <p><strong>Versión: 1.0</strong></p>
     <p>Aplicación PWA para gestionar tus cuentas bancarias y sus rendimientos.</p>
     <h4>✅ Funcionalidades</h4>
     <ul>
-      <li>🏦 Gestión de cuentas (titular, saldo, entidad)</li>
+      <li>🏦 Gestión de cuentas (titular, saldo, entidad, número)</li>
+      <li>🎨 Asignación de color a tarjetas</li>
       <li>💰 Registro de rendimientos: intereses y dividendos</li>
+      <li>📊 Intereses con desglose anual visible</li>
       <li>📊 Dividendos mostrados en bruto y neto (–19%)</li>
       <li>🔄 Sin movimientos: solo rendimientos con fecha</li>
       <li>📤 Exportar a JSON</li>
