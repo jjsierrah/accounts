@@ -1,7 +1,7 @@
 // --- IndexedDB ---
-const db = new Dexie('JJAccountsDB');
+const db = new Dexie('JJBankAccountsDB');
 db.version(1).stores({
-  accounts: '++id, bank, accountType, holder, holder2, currentBalance, category',
+  accounts: '++id, bank, description, holder, holder2, currentBalance, note',
   returns: '++id, accountId, amount, date, returnType, note'
 });
 
@@ -64,7 +64,7 @@ function showToast(message) {
     font-weight: bold;
     font-size: 1.05rem;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    z-index: 1001;
+    z-index: 10000;
     max-width: 90%;
     text-align: center;
   `;
@@ -210,7 +210,7 @@ async function renderAccountsSummary() {
         for (const accId in byAccount) {
           const acc = accountMap[accId];
           if (!acc) continue;
-          const displayName = acc.bank + (acc.accountType ? ` (${acc.accountType})` : '');
+          const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
           const amount = byAccount[accId];
           html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}`;
           if (isDividend) {
@@ -227,25 +227,23 @@ async function renderAccountsSummary() {
       fullHtml += processType(interests, 'Intereses recibidos', false);
     }
 
+    // --- LISTADO DE CUENTAS (SIN BOTONES DE EDICIÓN) ---
     fullHtml += `<div class="group-title">Cuentas</div>`;
     accounts.forEach(acc => {
       const holderLine = acc.holder2 ? `${acc.holder}<br><small>Titular 2: ${acc.holder2}</small>` : acc.holder;
       fullHtml += `
         <div class="asset-item">
-          <strong>${acc.bank}</strong> ${acc.accountType ? `(${acc.accountType})` : ''}<br>
+          <strong>${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
           Titular: ${holderLine}<br>
-          Saldo: ${formatCurrency(acc.currentBalance)}
-          <div class="modal-actions">
-            <button class="btn-edit" data-id="${acc.id}">Editar</button>
-            <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
-          </div>
+          Saldo: ${formatCurrency(acc.currentBalance)}<br>
+          ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
         </div>
       `;
     });
 
     summaryContainer.innerHTML = fullHtml;
 
-    // Toggle detalle
+    // --- TOGGLES DETALLE ---
     const toggleDivBtn = document.getElementById('toggleDividendosrecibidosDetail');
     if (toggleDivBtn) {
       toggleDivBtn.onclick = function() {
@@ -265,31 +263,13 @@ async function renderAccountsSummary() {
       };
     }
 
-    // Acciones
-    summaryContainer.onclick = async (e) => {
-      if (e.target.classList.contains('btn-delete')) {
-        const id = parseInt(e.target.dataset.id);
-        showConfirm('¿Eliminar esta cuenta y sus rentabilidades?', async () => {
-          await db.accounts.delete(id);
-          await db.returns.where('accountId').equals(id).delete();
-          renderAccountsSummary();
-        });
-      }
-      if (e.target.classList.contains('btn-edit')) {
-        const id = parseInt(e.target.dataset.id);
-        const acc = await db.accounts.get(id);
-        if (!acc) return;
-        openEditAccountForm(acc);
-      }
-    };
-
   } catch (err) {
     console.error('Error en renderAccountsSummary:', err);
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
 }
-// --- FORMULARIOS MODAL ---
+// --- FORMULARIOS ---
 async function showAddAccountForm() {
   const form = `
     <div class="form-group">
@@ -297,8 +277,8 @@ async function showAddAccountForm() {
       <input type="text" id="bank" placeholder="Ej: BBVA, Santander..." required />
     </div>
     <div class="form-group">
-      <label>Tipo de cuenta:</label>
-      <input type="text" id="accountType" placeholder="Ej: Corriente, Ahorro..." />
+      <label>Descripción:</label>
+      <input type="text" id="description" placeholder="Ej: Cuenta nómina, Ahorros..." />
     </div>
     <div class="form-group">
       <label>Titular principal:</label>
@@ -313,26 +293,58 @@ async function showAddAccountForm() {
       <input type="number" id="currentBalance" step="any" min="0" required />
     </div>
     <div class="form-group">
-      <label>Categoría:</label>
-      <input type="text" id="category" placeholder="Ej: Personal, Negocio..." />
+      <label>Nota:</label>
+      <input type="text" id="note" placeholder="Ej: Cuenta personal, Negocio..." />
     </div>
     <button id="btnSaveAccount" class="btn-primary">Añadir Cuenta</button>
   `;
   openModal('Añadir Cuenta', form);
   document.getElementById('btnSaveAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
-    const accountType = document.getElementById('accountType').value.trim();
+    const description = document.getElementById('description').value.trim();
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
-    const category = document.getElementById('category').value.trim() || 'General';
+    const note = document.getElementById('note').value.trim() || 'General';
     if (!bank || !holder || isNaN(currentBalance)) {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
-    await db.accounts.add({ bank, accountType, holder, holder2, currentBalance, category });
+    await db.accounts.add({ bank, description, holder, holder2, currentBalance, note });
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
+  };
+}
+
+async function showEditAccountForm() {
+  const accounts = await db.accounts.toArray();
+  if (accounts.length === 0) {
+    showToast('No hay cuentas para editar.');
+    return;
+  }
+  if (accounts.length === 1) {
+    openEditAccountForm(accounts[0]);
+    return;
+  }
+  const options = accounts.map(a => {
+    const display = `${a.bank}${a.description ? ` (${a.description})` : ''}`;
+    return `<option value="${a.id}">${display}</option>`;
+  }).join('');
+  const form = `
+    <div class="form-group">
+      <label>Selecciona cuenta:</label>
+      <select id="editAccountId">${options}</select>
+    </div>
+    <button id="btnSelectAccount" class="btn-primary">Editar</button>
+  `;
+  openModal('Editar Cuenta', form);
+  document.getElementById('btnSelectAccount').onclick = async () => {
+    const id = parseInt(document.getElementById('editAccountId').value);
+    const acc = accounts.find(a => a.id === id);
+    if (acc) {
+      document.getElementById('modalOverlay').style.display = 'none';
+      openEditAccountForm(acc);
+    }
   };
 }
 
@@ -343,8 +355,8 @@ async function openEditAccountForm(acc) {
       <input type="text" id="bank" value="${acc.bank}" required />
     </div>
     <div class="form-group">
-      <label>Tipo de cuenta:</label>
-      <input type="text" id="accountType" value="${acc.accountType || ''}" />
+      <label>Descripción:</label>
+      <input type="text" id="description" value="${acc.description || ''}" />
     </div>
     <div class="form-group">
       <label>Titular principal:</label>
@@ -359,24 +371,24 @@ async function openEditAccountForm(acc) {
       <input type="number" id="currentBalance" step="any" min="0" value="${acc.currentBalance}" required />
     </div>
     <div class="form-group">
-      <label>Categoría:</label>
-      <input type="text" id="category" value="${acc.category || 'General'}" />
+      <label>Nota:</label>
+      <input type="text" id="note" value="${acc.note || 'General'}" />
     </div>
     <button id="btnUpdateAccount" class="btn-primary">Guardar Cambios</button>
   `;
   openModal('Editar Cuenta', form);
   document.getElementById('btnUpdateAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
-    const accountType = document.getElementById('accountType').value.trim();
+    const description = document.getElementById('description').value.trim();
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
-    const category = document.getElementById('category').value.trim() || 'General';
+    const note = document.getElementById('note').value.trim() || 'General';
     if (!bank || !holder || isNaN(currentBalance)) {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
-    await db.accounts.update(acc.id, { bank, accountType, holder, holder2, currentBalance, category });
+    await db.accounts.update(acc.id, { bank, description, holder, holder2, currentBalance, note });
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
@@ -389,7 +401,7 @@ async function showAddReturnForm() {
     return;
   }
   const options = accounts.map(a => {
-    const display = a.bank + (a.accountType ? ` (${a.accountType})` : '');
+    const display = a.bank + (a.description ? ` (${a.description})` : '');
     return `<option value="${a.id}">${display}</option>`;
   }).join('');
   const form = `
@@ -398,7 +410,7 @@ async function showAddReturnForm() {
       <select id="returnAccount">${options}</select>
     </div>
     <div class="form-group">
-      <label>Tipo de rentabilidad:</label>
+      <label>Tipo de rendimiento:</label>
       <select id="returnType">
         <option value="interest">Interés</option>
         <option value="dividend">Dividendo</option>
@@ -416,9 +428,9 @@ async function showAddReturnForm() {
       <label>Nota (opcional):</label>
       <input type="text" id="returnNote" placeholder="Ej: Dividendo BBVA, Interés trimestral..." />
     </div>
-    <button id="btnSaveReturn" class="btn-primary">Añadir Rentabilidad</button>
+    <button id="btnSaveReturn" class="btn-primary">Añadir Rendimiento</button>
   `;
-  openModal('Añadir Rentabilidad', form);
+  openModal('Añadir Rendimiento', form);
   document.getElementById('btnSaveReturn').onclick = async () => {
     const accountId = parseInt(document.getElementById('returnAccount').value);
     const returnType = document.getElementById('returnType').value;
@@ -441,13 +453,13 @@ async function showReturnsList() {
   const accMap = {};
   accounts.forEach(a => accMap[a.id] = a);
   if (returns.length === 0) {
-    openModal('Rentabilidades', '<p>No hay rentabilidades.</p>');
+    openModal('Rendimientos', '<p>No hay rendimientos.</p>');
     return;
   }
-  let html = '<h3>Rentabilidades</h3>';
+  let html = '<h3>Rendimientos</h3>';
   returns.forEach(r => {
     const acc = accMap[r.accountId];
-    const displayName = acc ? `${acc.bank}${acc.accountType ? ` (${acc.accountType})` : ''}` : 'Cuenta eliminada';
+    const displayName = acc ? `${acc.bank}${acc.description ? ` (${acc.description})` : ''}` : 'Cuenta eliminada';
     const typeLabel = r.returnType === 'dividend' ? 'Dividendo' : 'Interés';
     html += `
       <div class="asset-item">
@@ -460,11 +472,11 @@ async function showReturnsList() {
       </div>
     `;
   });
-  openModal('Rentabilidades', html);
+  openModal('Rendimientos', html);
   document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
     if (e.target.classList.contains('btn-delete')) {
       const id = parseInt(e.target.dataset.id);
-      showConfirm('¿Eliminar esta rentabilidad?', async () => {
+      showConfirm('¿Eliminar este rendimiento?', async () => {
         await db.returns.delete(id);
         showReturnsList();
       });
@@ -475,7 +487,7 @@ async function showReturnsList() {
       if (!ret) return;
       const accounts = await db.accounts.toArray();
       const options = accounts.map(a => {
-        const display = a.bank + (a.accountType ? ` (${a.accountType})` : '');
+        const display = a.bank + (a.description ? ` (${a.description})` : '');
         return `<option value="${a.id}" ${a.id === ret.accountId ? 'selected' : ''}>${display}</option>`;
       }).join('');
       const form = `
@@ -504,7 +516,7 @@ async function showReturnsList() {
         </div>
         <button id="btnUpdateReturn" class="btn-primary">Guardar</button>
       `;
-      openModal('Editar Rentabilidad', form);
+      openModal('Editar Rendimiento', form);
       document.getElementById('btnUpdateReturn').onclick = async () => {
         const accountId = parseInt(document.getElementById('editReturnAccount').value);
         const returnType = document.getElementById('editReturnType').value;
@@ -523,7 +535,71 @@ async function showReturnsList() {
   };
 }
 
-// --- IMPORTAR / EXPORTAR ---
+function getCurrentTheme() {
+  return localStorage.getItem('theme') || 'light';
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#1a1a1a' : '#1a73e8');
+}
+
+// --- MENÚ DRAWER ---
+function initMenu() {
+  function openDrawer() {
+    let drawer = document.getElementById('mainDrawer');
+    if (!drawer) {
+      drawer = document.createElement('div');
+      drawer.id = 'mainDrawer';
+      drawer.className = 'main-drawer';
+      const currentTheme = getCurrentTheme();
+      const themeLabel = currentTheme === 'dark' ? '☀️ Modo claro' : '🌙 Modo oscuro';
+      drawer.innerHTML = `
+        <div class="drawer-content">
+          <div class="drawer-header">
+            <h3>Menú</h3>
+            <button class="close-drawer">&times;</button>
+          </div>
+          <ul class="drawer-menu">
+            <li><button data-action="add-account"><span>➕ Añadir Cuenta</span></button></li>
+            <li><button data-action="edit-account"><span>✏️ Editar Cuenta</span></button></li>
+            <li><button data-action="add-return"><span>💰 Añadir Rendimiento</span></button></li>
+            <li><button data-action="view-returns"><span>📊 Rendimientos</span></button></li>
+            <li><button data-action="import-export"><span>📤 Exportar / Importar</span></button></li>
+            <li><button data-action="theme-toggle"><span>${themeLabel}</span></button></li>
+            <li><button data-action="help"><span>ℹ️ Ayuda</span></button></li>
+          </ul>
+        </div>
+      `;
+      document.body.appendChild(drawer);
+      drawer.querySelector('.close-drawer').onclick = () => drawer.style.display = 'none';
+      drawer.onclick = (e) => { if (e.target === drawer) drawer.style.display = 'none'; };
+      drawer.querySelectorAll('[data-action]').forEach(btn => {
+        btn.onclick = () => {
+          drawer.style.display = 'none';
+          const a = btn.dataset.action;
+          if (a === 'add-account') showAddAccountForm();
+          else if (a === 'edit-account') showEditAccountForm();
+          else if (a === 'add-return') showAddReturnForm();
+          else if (a === 'view-returns') showReturnsList();
+          else if (a === 'import-export') showImportExport();
+          else if (a === 'theme-toggle') {
+            const newTheme = getCurrentTheme() === 'light' ? 'dark' : 'light';
+            setTheme(newTheme);
+            initMenu(); // Actualiza el texto del botón
+          }
+          else if (a === 'help') showHelp();
+        };
+      });
+    }
+    drawer.style.display = 'flex';
+  }
+  document.getElementById('menuToggle')?.addEventListener('click', openDrawer);
+}
+
+// --- IMPORT/EXPORT ---
 function showImportExport() {
   const content = `
     <h3>Exportar / Importar Datos</h3>
@@ -541,7 +617,7 @@ function showImportExport() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'jj-cuentas-backup.json';
+    a.download = 'jj-bank-accounts-backup.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -571,8 +647,9 @@ function showImportExport() {
         } catch (err) {
           console.error('Error en importación:', err);
           showToast('❌ Error: archivo no válido.');
+        } finally {
+          if (input.parentNode) input.parentNode.removeChild(input);
         }
-        if (input.parentNode) input.parentNode.removeChild(input);
       };
       document.body.appendChild(input);
       input.click();
@@ -583,15 +660,15 @@ function showImportExport() {
 // --- AYUDA ---
 function showHelp() {
   const content = `
-    <h3>Ayuda - JJ Cuentas</h3>
+    <h3>Ayuda - JJ Bank accounts</h3>
     <p><strong>Versión: 1.0</strong></p>
-    <p>Aplicación PWA para gestionar tus cuentas bancarias y su rentabilidad.</p>
+    <p>Aplicación PWA para gestionar tus cuentas bancarias y sus rendimientos.</p>
     <h4>✅ Funcionalidades</h4>
     <ul>
       <li>🏦 Gestión de cuentas (titular, saldo, entidad)</li>
-      <li>💰 Registro de rentabilidades: intereses y dividendos</li>
+      <li>💰 Registro de rendimientos: intereses y dividendos</li>
       <li>📊 Dividendos mostrados en bruto y neto (–19%)</li>
-      <li>🔄 Sin movimientos: solo rentabilidades con fecha</li>
+      <li>🔄 Sin movimientos: solo rendimientos con fecha</li>
       <li>📤 Exportar a JSON</li>
       <li>🌙 Tema claro/oscuro</li>
     </ul>
@@ -599,66 +676,6 @@ function showHelp() {
     <p>Tus datos <strong>se guardan solo en tu dispositivo</strong>.</p>
   `;
   openModal('Ayuda', content);
-}
-
-// --- TEMA ---
-function setTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('theme', theme);
-  const toggle = document.getElementById('themeToggle');
-  if (toggle) toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === 'dark' ? '#1a1a1a' : '#1a73e8');
-}
-
-function initTheme() {
-  const saved = localStorage.getItem('theme') || 'light';
-  setTheme(saved);
-  const toggle = document.getElementById('themeToggle');
-  if (toggle) toggle.onclick = () => setTheme(localStorage.getItem('theme') === 'light' ? 'dark' : 'light');
-}
-
-// --- MENÚ DRAWER ---
-function initMenu() {
-  function openDrawer() {
-    let drawer = document.getElementById('mainDrawer');
-    if (!drawer) {
-      drawer = document.createElement('div');
-      drawer.id = 'mainDrawer';
-      drawer.className = 'main-drawer';
-      drawer.innerHTML = `
-        <div class="drawer-content">
-          <div class="drawer-header">
-            <h3>Menú</h3>
-            <button class="close-drawer">&times;</button>
-          </div>
-          <ul class="drawer-menu">
-            <li><button data-action="add-account"><span>➕ Añadir Cuenta</span></button></li>
-            <li><button data-action="add-return"><span>💰 Añadir Rentabilidad</span></button></li>
-            <li><button data-action="view-returns"><span>📊 Rentabilidades</span></button></li>
-            <li><button data-action="import-export"><span>📤 Exportar / Importar</span></button></li>
-            <li><button data-action="help"><span>ℹ️ Ayuda</span></button></li>
-          </ul>
-        </div>
-      `;
-      document.body.appendChild(drawer);
-      drawer.querySelector('.close-drawer').onclick = () => drawer.style.display = 'none';
-      drawer.onclick = (e) => { if (e.target === drawer) drawer.style.display = 'none'; };
-      drawer.querySelectorAll('[data-action]').forEach(btn => {
-        btn.onclick = () => {
-          drawer.style.display = 'none';
-          const a = btn.dataset.action;
-          if (a === 'add-account') showAddAccountForm();
-          else if (a === 'add-return') showAddReturnForm();
-          else if (a === 'view-returns') showReturnsList();
-          else if (a === 'import-export') showImportExport();
-          else if (a === 'help') showHelp();
-        };
-      });
-    }
-    drawer.style.display = 'flex';
-  }
-  document.getElementById('menuToggle')?.addEventListener('click', openDrawer);
 }
 
 // --- INICIO ---
@@ -670,6 +687,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }).then(() => {
     renderAccountsSummary();
   });
-  initTheme();
+  setTheme(getCurrentTheme());
   initMenu();
 });
