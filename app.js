@@ -431,19 +431,33 @@ async function showAddReturnForm() {
     <button id="btnSaveReturn" class="btn-primary">Añadir Rendimiento</button>
   `;
   openModal('Añadir Rendimiento', form);
+
+  // CORRECCIÓN AQUÍ
   document.getElementById('btnSaveReturn').onclick = async () => {
     const accountId = parseInt(document.getElementById('returnAccount').value);
     const returnType = document.getElementById('returnType').value;
-    const amount = parseFloat(document.getElementById('returnAmount').value);
+    const amountStr = document.getElementById('returnAmount').value;
     const date = document.getElementById('returnDate').value;
     const note = document.getElementById('returnNote').value.trim() || null;
-    if (isNaN(amount) || amount <= 0 || !isDateValidAndNotFuture(date)) {
-      showToast('Importe válido y fecha no futura.');
+
+    // Verificar que el importe sea un número positivo
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount) || amount <= 0) {
+      showToast('Importe inválido.');
       return;
     }
+
+    // Verificar que la fecha no sea futura
+    if (!isDateValidAndNotFuture(date)) {
+      showToast('La fecha no puede ser futura.');
+      return;
+    }
+
+    // Si pasa las validaciones, guarda el rendimiento
     await db.returns.add({ accountId, amount, date, returnType, note });
     document.getElementById('modalOverlay').style.display = 'none';
-    renderAccountsSummary();
+    renderAccountsSummary(); // Actualiza el resumen
+    showToast('✅ Rendimiento añadido correctamente.');
   };
 }
 
