@@ -1,8 +1,15 @@
 // --- IndexedDB ---
 const db = new Dexie('JJBankAccountsDB');
-db.version(1).stores({
-  accounts: '++id, bank, description, holder, holder2, currentBalance, note, color, accountNumber', // <-- Añadido color y accountNumber
+db.version(2).stores({ // Versión actualizada para añadir isValueAccount
+  accounts: '++id, bank, description, holder, holder2, currentBalance, note, color, accountNumber, isValueAccount',
   returns: '++id, accountId, amount, date, returnType, note'
+}).upgrade(tx => {
+  // Migrar cuentas antiguas: añadir isValueAccount como false
+  return tx.accounts.toCollection().modify(acc => {
+    if (acc.isValueAccount === undefined) {
+      acc.isValueAccount = false;
+    }
+  });
 });
 
 // --- UTILIDADES ---
@@ -44,6 +51,27 @@ function formatNumber(value) {
     maximumFractionDigits: 2,
     useGrouping: true
   }).format(value);
+}
+
+// --- FORMATO IBAN ---
+function formatIBAN(input) {
+  if (!input) return '';
+  const cleaned = input.toUpperCase().replace(/\s/g, '');
+  if (cleaned.length < 4) return cleaned;
+  let formatted = cleaned.substring(0, 4);
+  for (let i = 4; i < cleaned.length; i += 4) {
+    formatted += ' ' + cleaned.substring(i, i + 4);
+  }
+  return formatted;
+}
+
+// --- ORDEN CUSTOM ---
+function saveCustomOrder(symbolList) {
+  localStorage.setItem('accountOrder', JSON.stringify(symbolList));
+}
+
+function loadCustomOrder() {
+  return JSON.parse(localStorage.getItem('accountOrder') || '[]');
 }
 
 function showToast(message) {
@@ -148,10 +176,33 @@ async function renderAccountsSummary() {
       return;
     }
 
-    const totalBalance = accounts.reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+    // Cargar orden personalizado
+    const customOrder = loadCustomOrder();
+    const orderedAccounts = [...accounts].sort((a, b) => {
+      const aIndex = customOrder.indexOf(a.id);
+      const bIndex = customOrder.indexOf(b.id);
+      if (aIndex === -1 && bIndex === -1) return 0;
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
+
+    // Calcular totales
+    let totalBalanceAccounts = 0;
+    let totalBalanceValues = 0;
+    for (const acc of accounts) {
+      if (acc.isValueAccount) {
+        totalBalanceValues += acc.currentBalance || 0;
+      } else {
+        totalBalanceAccounts += acc.currentBalance || 0;
+      }
+    }
+
     summaryTotals.innerHTML = `
       <div class="summary-card">
-        <div><strong>Saldo total:</strong> ${formatCurrency(totalBalance)}</div>
+        <div><strong>Saldo total (Cuentas):</strong> ${formatCurrency(totalBalanceAccounts)}</div>
+        <div><strong>Saldo total (Valores):</strong> ${formatCurrency(totalBalanceValues)}</div>
+        <div><strong>Total General:</strong> ${formatCurrency(totalBalanceAccounts + totalBalanceValues)}</div>
       </div>
     `;
 
@@ -226,26 +277,65 @@ async function renderAccountsSummary() {
       };
 
       fullHtml += processType(dividends, 'Dividendos recibidos', true);
-      fullHtml += processType(interests, 'Intereses recibidos', false);
+      fullHtml += processType(interests, 'Rendimientos recibidos', false); // Cambiado aquí
     }
 
     // --- LISTADO DE CUENTAS ---
     fullHtml += `<div class="group-title">Cuentas</div>`;
-    accounts.forEach(acc => {
+    fullHtml += `<div id="account-list" class="account-list">`; // Contenedor para drag & drop
+    for (const acc of orderedAccounts) {
       const holderLine = acc.holder2 ? `${acc.holder}<br><small>Titular 2: ${acc.holder2}</small>` : acc.holder;
       const colorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+      const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
       fullHtml += `
-        <div class="asset-item" style="${colorStyle}">
+        <div class="asset-item" style="${colorStyle}" data-id="${acc.id}" draggable="true">
           <strong>${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-          ${acc.accountNumber ? `Nº Cuenta: ${acc.accountNumber}<br>` : ''}
+          ${accountNumberDisplay ? `Nº Cuenta: ${accountNumberDisplay}<br>` : ''}
           Titular: ${holderLine}<br>
           Saldo: ${formatCurrency(acc.currentBalance)}<br>
           ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
         </div>
       `;
-    });
+    }
+    fullHtml += `</div>`;
 
     summaryContainer.innerHTML = fullHtml;
+
+    // --- LÓGICA DE DRAG & DROP ---
+    const list = document.getElementById('account-list');
+    if (list) {
+      list.addEventListener('dragstart', e => {
+        if (e.target.classList.contains('asset-item')) {
+          e.target.classList.add('dragging');
+          e.dataTransfer.setData('text/plain', e.target.dataset.id);
+          e.dataTransfer.effectAllowed = 'move';
+        }
+      });
+      list.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+      list.addEventListener('dragenter', e => {
+        e.preventDefault();
+      });
+      list.addEventListener('drop', e => {
+        e.preventDefault();
+        const dragging = document.querySelector('.dragging');
+        if (dragging) {
+          const target = e.target.closest('.asset-item');
+          if (target && target !== dragging) {
+            const rect = target.getBoundingClientRect();
+            const next = rect.y + rect.height / 2 < e.clientY ? target.nextSibling : target;
+            list.insertBefore(dragging, next);
+            const ids = Array.from(list.children).map(el => parseInt(el.dataset.id));
+            saveCustomOrder(ids);
+          }
+        }
+      });
+      list.addEventListener('dragend', e => {
+        e.target.classList.remove('dragging');
+      });
+    }
 
     // --- TOGGLES DETALLE ---
     const toggleDivBtn = document.getElementById('toggleDividendosrecibidosDetail');
@@ -257,10 +347,10 @@ async function renderAccountsSummary() {
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
       };
     }
-    const toggleIntBtn = document.getElementById('toggleInteresesrecibidosDetail');
+    const toggleIntBtn = document.getElementById('toggleRendimientosrecibidosDetail');
     if (toggleIntBtn) {
       toggleIntBtn.onclick = function() {
-        const detail = document.getElementById('InteresesrecibidosDetail');
+        const detail = document.getElementById('RendimientosrecibidosDetail');
         const isVisible = detail.style.display === 'block';
         detail.style.display = isVisible ? 'none' : 'block';
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
@@ -272,8 +362,8 @@ async function renderAccountsSummary() {
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
-}
-// --- FORMULARIOS ---
+      }
+ // --- FORMULARIOS ---
 async function showAddAccountForm() {
   const form = `
     <div class="form-group">
@@ -287,6 +377,9 @@ async function showAddAccountForm() {
     <div class="form-group">
       <label>Nº de Cuenta (IBAN):</label>
       <input type="text" id="accountNumber" placeholder="Ej: ES12 1234 5678 9012 3456 7890" />
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="isValueAccount"> Cuenta de Valores</label>
     </div>
     <div class="form-group">
       <label>Titular principal:</label>
@@ -311,10 +404,19 @@ async function showAddAccountForm() {
     <button id="btnSaveAccount" class="btn-primary">Añadir Cuenta</button>
   `;
   openModal('Añadir Cuenta', form);
+  document.getElementById('isValueAccount').onchange = (e) => {
+    const accountNumberInput = document.getElementById('accountNumber');
+    if (e.target.checked) {
+      accountNumberInput.placeholder = "Ej: DE000A12B3C4";
+    } else {
+      accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
+    }
+  };
   document.getElementById('btnSaveAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
     const accountNumber = document.getElementById('accountNumber').value.trim() || null;
+    const isValueAccount = document.getElementById('isValueAccount').checked;
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
@@ -324,7 +426,7 @@ async function showAddAccountForm() {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
-    await db.accounts.add({ bank, description, accountNumber, holder, holder2, currentBalance, color, note });
+    await db.accounts.add({ bank, description, accountNumber, isValueAccount, holder, holder2, currentBalance, color, note });
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
@@ -339,12 +441,14 @@ async function showAccountList() {
   let html = '<h3>Cuentas</h3>';
   accounts.forEach(acc => {
     const colorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+    const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
     html += `
       <div class="asset-item" style="${colorStyle}">
         <strong>${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-        ${acc.accountNumber ? `Nº Cuenta: ${acc.accountNumber}<br>` : ''}
+        ${accountNumberDisplay ? `Nº Cuenta: ${accountNumberDisplay}<br>` : ''}
         Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
         Saldo: ${formatCurrency(acc.currentBalance)}<br>
+        ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
         ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
         <div class="modal-actions">
           <button class="btn-edit" data-id="${acc.id}">Editar</button>
@@ -387,6 +491,9 @@ async function openEditAccountForm(acc) {
       <input type="text" id="accountNumber" value="${acc.accountNumber || ''}" />
     </div>
     <div class="form-group">
+      <label><input type="checkbox" id="isValueAccount" ${acc.isValueAccount ? 'checked' : ''}> Cuenta de Valores</label>
+    </div>
+    <div class="form-group">
       <label>Titular principal:</label>
       <input type="text" id="holder" value="${acc.holder}" required />
     </div>
@@ -409,10 +516,19 @@ async function openEditAccountForm(acc) {
     <button id="btnUpdateAccount" class="btn-primary">Guardar Cambios</button>
   `;
   openModal('Editar Cuenta', form);
+  document.getElementById('isValueAccount').onchange = (e) => {
+    const accountNumberInput = document.getElementById('accountNumber');
+    if (e.target.checked) {
+      accountNumberInput.placeholder = "Ej: DE000A12B3C4";
+    } else {
+      accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
+    }
+  };
   document.getElementById('btnUpdateAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
     const accountNumber = document.getElementById('accountNumber').value.trim() || null;
+    const isValueAccount = document.getElementById('isValueAccount').checked;
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
@@ -422,7 +538,7 @@ async function openEditAccountForm(acc) {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
-    await db.accounts.update(acc.id, { bank, description, accountNumber, holder, holder2, currentBalance, color, note });
+    await db.accounts.update(acc.id, { bank, description, accountNumber, isValueAccount, holder, holder2, currentBalance, color, note });
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
@@ -479,6 +595,7 @@ async function showAddReturnForm() {
       return;
     }
 
+    // Permitir la fecha actual (cambio aquí)
     if (!isDateValidAndNotFuture(date)) {
       showToast('La fecha no puede ser futura.');
       return;
@@ -578,7 +695,6 @@ async function showReturnsList() {
     }
   };
 }
-
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
 }
@@ -625,7 +741,7 @@ function initMenu() {
           drawer.style.display = 'none';
           const a = btn.dataset.action;
           if (a === 'add-account') showAddAccountForm();
-          else if (a === 'view-accounts') showAccountList(); // Cambiado a mostrar lista
+          else if (a === 'view-accounts') showAccountList();
           else if (a === 'add-return') showAddReturnForm();
           else if (a === 'view-returns') showReturnsList();
           else if (a === 'import-export') showImportExport();
@@ -710,10 +826,13 @@ function showHelp() {
     <h4>✅ Funcionalidades</h4>
     <ul>
       <li>🏦 Gestión de cuentas (titular, saldo, entidad, número)</li>
+      <li>🏷️ Identificación de cuentas de valores</li>
       <li>🎨 Asignación de color a tarjetas</li>
+      <li>🔄 Reordenar cuentas con arrastrar y soltar</li>
       <li>💰 Registro de rendimientos: intereses y dividendos</li>
-      <li>📊 Intereses con desglose anual visible</li>
+      <li>📊 Rendimientos con desglose anual visible</li>
       <li>📊 Dividendos mostrados en bruto y neto (–19%)</li>
+      <li>📊 Separación de saldos: Cuentas y Valores</li>
       <li>🔄 Sin movimientos: solo rendimientos con fecha</li>
       <li>📤 Exportar a JSON</li>
       <li>🌙 Tema claro/oscuro</li>
