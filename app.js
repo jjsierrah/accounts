@@ -200,8 +200,9 @@ async function renderAccountsSummary() {
 
     summaryTotals.innerHTML = `
       <div class="summary-card">
-        <div><strong>Saldo total (Cuentas):</strong> ${formatCurrency(totalBalanceAccounts)}</div>
-        <div><strong>Saldo total (Valores):</strong> ${formatCurrency(totalBalanceValues)}</div>
+        <div><strong>Saldo (Cuentas):</strong> ${formatCurrency(totalBalanceAccounts)}</div>
+        <div><strong>Saldo (Valores):</strong> ${formatCurrency(totalBalanceValues)}</div>
+        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
         <div><strong>Total General:</strong> ${formatCurrency(totalBalanceAccounts + totalBalanceValues)}</div>
       </div>
     `;
@@ -219,8 +220,7 @@ async function renderAccountsSummary() {
         let html = `<div class="summary-card returns-section"><div class="group-title">${title}</div>`;
         html += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}`;
         if (isDividend) {
-          const totalNeto = totalBruto * (1 - 0.19);
-          html += ` | ${formatCurrency(totalNeto)} (Neto)`;
+          // No se muestra neto
         }
         html += `</strong></div>`;
 
@@ -238,8 +238,7 @@ async function renderAccountsSummary() {
             const bruto = byYear[year];
             html += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}`;
             if (isDividend) {
-              const neto = bruto * (1 - 0.19);
-              html += ` | ${formatCurrency(neto)} (Neto)`;
+              // No se muestra neto
             }
             html += `</strong></div>`;
           }
@@ -267,8 +266,7 @@ async function renderAccountsSummary() {
           const amount = byAccount[accId];
           html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}`;
           if (isDividend) {
-            const neto = amount * (1 - 0.19);
-            html += ` | ${formatCurrency(neto)} (Neto)`;
+            // No se muestra neto
           }
           html += `</div>`;
         }
@@ -276,21 +274,21 @@ async function renderAccountsSummary() {
         return html;
       };
 
-      fullHtml += processType(dividends, 'Dividendos recibidos', true);
-      fullHtml += processType(interests, 'Rendimientos recibidos', false); // Cambiado aquí
+      fullHtml += processType(dividends, 'Dividendos', true); // Cambiado aquí
+      fullHtml += processType(interests, 'Interés', false); // Cambiado aquí
     }
 
     // --- LISTADO DE CUENTAS ---
     fullHtml += `<div class="group-title">Cuentas</div>`;
     fullHtml += `<div id="account-list" class="account-list">`; // Contenedor para drag & drop
     for (const acc of orderedAccounts) {
-      const holderLine = acc.holder2 ? `${acc.holder}<br><small>Titular 2: ${acc.holder2}</small>` : acc.holder;
+      const holderLine = acc.holder2 ? `${acc.holder}<span style="font-size: 1rem;"> / ${acc.holder2}</span>` : acc.holder; // Titular 2 mismo tamaño
       const colorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
       const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
       fullHtml += `
         <div class="asset-item" style="${colorStyle}" data-id="${acc.id}" draggable="true">
           <strong>${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-          ${accountNumberDisplay ? `Nº Cuenta: ${accountNumberDisplay}<br>` : ''}
+          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
           Titular: ${holderLine}<br>
           Saldo: ${formatCurrency(acc.currentBalance)}<br>
           ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
@@ -337,20 +335,35 @@ async function renderAccountsSummary() {
       });
     }
 
+    // --- LÓGICA DE COPIAR AL PORTAPAPELES ---
+    document.querySelectorAll('.btn-copy').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const number = e.target.dataset.number;
+        if (number) {
+          navigator.clipboard.writeText(number).then(() => {
+            showToast('✅ Nº de cuenta copiado.');
+          }).catch(err => {
+            console.error('Error al copiar:', err);
+            showToast('❌ Error al copiar.');
+          });
+        }
+      });
+    });
+
     // --- TOGGLES DETALLE ---
-    const toggleDivBtn = document.getElementById('toggleDividendosrecibidosDetail');
+    const toggleDivBtn = document.getElementById('toggleDividendosDetail');
     if (toggleDivBtn) {
       toggleDivBtn.onclick = function() {
-        const detail = document.getElementById('DividendosrecibidosDetail');
+        const detail = document.getElementById('DividendosDetail');
         const isVisible = detail.style.display === 'block';
         detail.style.display = isVisible ? 'none' : 'block';
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
       };
     }
-    const toggleIntBtn = document.getElementById('toggleRendimientosrecibidosDetail');
+    const toggleIntBtn = document.getElementById('toggleInterésDetail');
     if (toggleIntBtn) {
       toggleIntBtn.onclick = function() {
-        const detail = document.getElementById('RendimientosrecibidosDetail');
+        const detail = document.getElementById('InterésDetail');
         const isVisible = detail.style.display === 'block';
         detail.style.display = isVisible ? 'none' : 'block';
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
@@ -362,7 +375,7 @@ async function renderAccountsSummary() {
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
-      }
+}
  // --- FORMULARIOS ---
 async function showAddAccountForm() {
   const form = `
