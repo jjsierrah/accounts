@@ -200,10 +200,10 @@ async function renderAccountsSummary() {
 
     summaryTotals.innerHTML = `
       <div class="summary-card">
-        <div><strong>Saldo (Cuentas):</strong> ${formatCurrency(totalBalanceAccounts)}</div>
-        <div><strong>Saldo (Valores):</strong> ${formatCurrency(totalBalanceValues)}</div>
+        <div class="dividend-line"><strong>Saldo (Cuentas):</strong> <strong>${formatCurrency(totalBalanceAccounts)}</strong></div>
+        <div class="dividend-line"><strong>Saldo (Valores):</strong> <strong>${formatCurrency(totalBalanceValues)}</strong></div>
         <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
-        <div><strong>Total General:</strong> ${formatCurrency(totalBalanceAccounts + totalBalanceValues)}</div>
+        <div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBalanceAccounts + totalBalanceValues)}</strong></div>
       </div>
     `;
 
@@ -275,7 +275,7 @@ async function renderAccountsSummary() {
       };
 
       fullHtml += processType(dividends, 'Dividendos', true); // Cambiado aquí
-      fullHtml += processType(interests, 'Interés', false); // Cambiado aquí
+      fullHtml += processType(interests, 'Intereses', false); // Cambiado aquí
     }
 
     // --- LISTADO DE CUENTAS ---
@@ -283,11 +283,12 @@ async function renderAccountsSummary() {
     fullHtml += `<div id="account-list" class="account-list">`; // Contenedor para drag & drop
     for (const acc of orderedAccounts) {
       const holderLine = acc.holder2 ? `${acc.holder}<span style="font-size: 1rem;"> / ${acc.holder2}</span>` : acc.holder; // Titular 2 mismo tamaño
-      const colorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+      const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en el texto principal
+      const borderColorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
       const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
       fullHtml += `
-        <div class="asset-item" style="${colorStyle}" data-id="${acc.id}" draggable="true">
-          <strong>${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
+        <div class="asset-item" style="${borderColorStyle}" data-id="${acc.id}" draggable="true">
+          <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
           ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
           Titular: ${holderLine}<br>
           Saldo: ${formatCurrency(acc.currentBalance)}<br>
@@ -360,10 +361,10 @@ async function renderAccountsSummary() {
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
       };
     }
-    const toggleIntBtn = document.getElementById('toggleInterésDetail');
+    const toggleIntBtn = document.getElementById('toggleInteresesDetail');
     if (toggleIntBtn) {
       toggleIntBtn.onclick = function() {
-        const detail = document.getElementById('InterésDetail');
+        const detail = document.getElementById('InteresesDetail');
         const isVisible = detail.style.display === 'block';
         detail.style.display = isVisible ? 'none' : 'block';
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
@@ -376,7 +377,7 @@ async function renderAccountsSummary() {
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
 }
- // --- FORMULARIOS ---
+// --- FORMULARIOS ---
 async function showAddAccountForm() {
   const form = `
     <div class="form-group">
@@ -453,12 +454,12 @@ async function showAccountList() {
   }
   let html = '<h3>Cuentas</h3>';
   accounts.forEach(acc => {
-    const colorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+    const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
     const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
     html += `
-      <div class="asset-item" style="${colorStyle}">
-        <strong>${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-        ${accountNumberDisplay ? `Nº Cuenta: ${accountNumberDisplay}<br>` : ''}
+      <div class="asset-item">
+        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
+        ${accountNumberDisplay ? `Nº: ${accountNumberDisplay}<br>` : ''}
         Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
         Saldo: ${formatCurrency(acc.currentBalance)}<br>
         ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
@@ -844,7 +845,7 @@ function showHelp() {
       <li>🔄 Reordenar cuentas con arrastrar y soltar</li>
       <li>💰 Registro de rendimientos: intereses y dividendos</li>
       <li>📊 Rendimientos con desglose anual visible</li>
-      <li>📊 Dividendos mostrados en bruto y neto (–19%)</li>
+      <li>📊 Dividendos mostrados en bruto</li>
       <li>📊 Separación de saldos: Cuentas y Valores</li>
       <li>🔄 Sin movimientos: solo rendimientos con fecha</li>
       <li>📤 Exportar a JSON</li>
