@@ -429,6 +429,13 @@ async function showAddAccountForm() {
   const banks = [...new Set(allAccounts.map(a => a.bank))];
   const bankOptions = banks.map(b => `<option value="${b}">`).join('');
 
+  // Obtener titulares existentes para datalist (común)
+  const holders = [...new Set([
+    ...allAccounts.map(a => a.holder),
+    ...allAccounts.map(a => a.holder2).filter(h => h)
+  ])];
+  const holderOptions = holders.map(h => `<option value="${h}">`).join('');
+
   const form = `
     <div class="form-group">
       <label>Entidad:</label>
@@ -440,19 +447,22 @@ async function showAddAccountForm() {
       <input type="text" id="description" placeholder="Ej: Cuenta nómina, Ahorros..." />
     </div>
     <div class="form-group">
-      <label>Nº de Cuenta (IBAN):</label>
-      <input type="text" id="accountNumber" placeholder="Ej: ES12 1234 5678 9012 3456 7890" />
+      <label>Cuenta de Valores</label>
+      <input type="checkbox" id="isValueAccount" style="width: auto; margin-left: 8px; vertical-align: middle;">
     </div>
     <div class="form-group">
-      <label>Cuenta de Valores <input type="checkbox" id="isValueAccount" style="width: auto; margin-left: 4px; transform: scale(0.8);"></label>
+      <label>Nº de Cuenta (IBAN):</label>
+      <input type="text" id="accountNumber" placeholder="Ej: ES12 1234 5678 9012 3456 7890" required />
     </div>
     <div class="form-group">
       <label>Titular principal:</label>
-      <input type="text" id="holder" required />
+      <input type="text" id="holder" list="holders" required />
+      <datalist id="holders">${holderOptions}</datalist>
     </div>
     <div class="form-group">
       <label>Segundo titular:</label>
-      <input type="text" id="holder2" />
+      <input type="text" id="holder2" list="holders" />
+      <datalist id="holders">${holderOptions}</datalist>
     </div>
     <div class="form-group">
       <label>Saldo actual (€):</label>
@@ -480,14 +490,14 @@ async function showAddAccountForm() {
   document.getElementById('btnSaveAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
-    const accountNumber = document.getElementById('accountNumber').value.trim() || null;
+    const accountNumber = document.getElementById('accountNumber').value.trim();
     const isValueAccount = document.getElementById('isValueAccount').checked;
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
     const color = document.getElementById('color').value;
     const note = document.getElementById('note').value.trim() || null;
-    if (!bank || !holder || isNaN(currentBalance)) {
+    if (!bank || !holder || !accountNumber || isNaN(currentBalance)) {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
@@ -504,6 +514,13 @@ async function openEditAccountForm(acc) {
   const banks = [...new Set(allAccounts.map(a => a.bank))];
   const bankOptions = banks.map(b => `<option value="${b}">`).join('');
 
+  // Obtener titulares existentes para datalist (común)
+  const holders = [...new Set([
+    ...allAccounts.map(a => a.holder),
+    ...allAccounts.map(a => a.holder2).filter(h => h)
+  ])];
+  const holderOptions = holders.map(h => `<option value="${h}">`).join('');
+
   const form = `
     <div class="form-group">
       <label>Entidad:</label>
@@ -515,19 +532,22 @@ async function openEditAccountForm(acc) {
       <input type="text" id="description" value="${acc.description || ''}" />
     </div>
     <div class="form-group">
-      <label>Nº de Cuenta (IBAN):</label>
-      <input type="text" id="accountNumber" value="${acc.accountNumber || ''}" />
+      <label>Cuenta de Valores</label>
+      <input type="checkbox" id="isValueAccount" ${acc.isValueAccount ? 'checked' : ''} style="width: auto; margin-left: 8px; vertical-align: middle;">
     </div>
     <div class="form-group">
-      <label>Cuenta de Valores <input type="checkbox" id="isValueAccount" ${acc.isValueAccount ? 'checked' : ''} style="width: auto; margin-left: 4px; transform: scale(0.8);"></label>
+      <label>Nº de Cuenta (IBAN):</label>
+      <input type="text" id="accountNumber" value="${acc.accountNumber || ''}" required />
     </div>
     <div class="form-group">
       <label>Titular principal:</label>
       <input type="text" id="holder" value="${acc.holder}" required />
+      <datalist id="holders">${holderOptions}</datalist>
     </div>
     <div class="form-group">
       <label>Segundo titular:</label>
       <input type="text" id="holder2" value="${acc.holder2 || ''}" />
+      <datalist id="holders">${holderOptions}</datalist>
     </div>
     <div class="form-group">
       <label>Saldo actual (€):</label>
@@ -564,14 +584,14 @@ async function openEditAccountForm(acc) {
   document.getElementById('btnUpdateAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
-    const accountNumber = document.getElementById('accountNumber').value.trim() || null;
+    const accountNumber = document.getElementById('accountNumber').value.trim();
     const isValueAccount = document.getElementById('isValueAccount').checked;
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
     const color = document.getElementById('color').value;
     const note = document.getElementById('note').value.trim() || null;
-    if (!bank || !holder || isNaN(currentBalance)) {
+    if (!bank || !holder || !accountNumber || isNaN(currentBalance)) {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
@@ -580,158 +600,6 @@ async function openEditAccountForm(acc) {
     renderAccountsSummary();
   };
 }
-
-async function showAddReturnForm() {
-  const accounts = await db.accounts.toArray();
-  if (accounts.length === 0) {
-    showToast('Añade una cuenta primero.');
-    return;
-  }
-  const options = accounts.map(a => {
-    const display = a.bank + (a.description ? ` (${a.description})` : '');
-    return `<option value="${a.id}">${display}</option>`;
-  }).join('');
-  const form = `
-    <div class="form-group">
-      <label>Cuenta:</label>
-      <select id="returnAccount">${options}</select>
-    </div>
-    <div class="form-group">
-      <label>Tipo de rendimiento:</label>
-      <select id="returnType">
-        <option value="interest">Interés</option>
-        <option value="dividend">Dividendo</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Importe (€):</label>
-      <input type="number" id="returnAmount" step="any" min="0" required />
-    </div>
-    <div class="form-group">
-      <label>Fecha:</label>
-      <input type="date" id="returnDate" value="${today()}" required />
-    </div>
-    <div class="form-group">
-      <label>Nota (opcional):</label>
-      <input type="text" id="returnNote" placeholder="Ej: Dividendo BBVA, Interés trimestral..." />
-    </div>
-    <button id="btnSaveReturn" class="btn-primary">Añadir Rendimiento</button>
-  `;
-  openModal('Añadir Rendimiento', form);
-
-  document.getElementById('btnSaveReturn').onclick = async () => {
-    const accountId = parseInt(document.getElementById('returnAccount').value);
-    const returnType = document.getElementById('returnType').value;
-    const amountStr = document.getElementById('returnAmount').value;
-    const date = document.getElementById('returnDate').value;
-    const note = document.getElementById('returnNote').value.trim() || null;
-
-    const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount <= 0) {
-      showToast('Importe inválido.');
-      return;
-    }
-
-    // Permitir la fecha actual (cambio aquí)
-    if (!isDateValidAndNotFuture(date)) {
-      showToast('La fecha no puede ser futura.');
-      return;
-    }
-
-    await db.returns.add({ accountId, amount, date, returnType, note });
-    document.getElementById('modalOverlay').style.display = 'none';
-    renderAccountsSummary();
-    showToast('✅ Rendimiento añadido correctamente.');
-  };
-}
-
-async function showReturnsList() {
-  const returns = await db.returns.reverse().toArray();
-  const accounts = await db.accounts.toArray();
-  const accMap = {};
-  accounts.forEach(a => accMap[a.id] = a);
-  if (returns.length === 0) {
-    openModal('Rendimientos', '<p>No hay rendimientos.</p>');
-    return;
-  }
-  let html = '<h3>Rendimientos</h3>';
-  returns.forEach(r => {
-    const acc = accMap[r.accountId];
-    const displayName = acc ? `${acc.bank}${acc.description ? ` (${acc.description})` : ''}` : 'Cuenta eliminada';
-    const typeLabel = r.returnType === 'dividend' ? 'Dividendo' : 'Interés';
-    html += `
-      <div class="asset-item">
-        <strong>${displayName}</strong><br>
-        ${typeLabel}: ${formatCurrency(r.amount)} el ${formatDate(r.date)}${r.note ? ` - ${r.note}` : ''}
-        <div class="modal-actions">
-          <button class="btn-edit" data-id="${r.id}">Editar</button>
-          <button class="btn-delete" data-id="${r.id}">Eliminar</button>
-        </div>
-      </div>
-    `;
-  });
-  openModal('Rendimientos', html);
-  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
-    if (e.target.classList.contains('btn-delete')) {
-      const id = parseInt(e.target.dataset.id);
-      showConfirm('¿Eliminar este rendimiento?', async () => {
-        await db.returns.delete(id);
-        showReturnsList();
-      });
-    }
-    if (e.target.classList.contains('btn-edit')) {
-      const id = parseInt(e.target.dataset.id);
-      const ret = await db.returns.get(id);
-      if (!ret) return;
-      const accounts = await db.accounts.toArray();
-      const options = accounts.map(a => {
-        const display = a.bank + (a.description ? ` (${a.description})` : '');
-        return `<option value="${a.id}" ${a.id === ret.accountId ? 'selected' : ''}>${display}</option>`;
-      }).join('');
-      const form = `
-        <div class="form-group">
-          <label>Cuenta:</label>
-          <select id="editReturnAccount">${options}</select>
-        </div>
-        <div class="form-group">
-          <label>Tipo:</label>
-          <select id="editReturnType">
-            <option value="interest" ${ret.returnType === 'interest' ? 'selected' : ''}>Interés</option>
-            <option value="dividend" ${ret.returnType === 'dividend' ? 'selected' : ''}>Dividendo</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Importe (€):</label>
-          <input type="number" id="editReturnAmount" value="${ret.amount}" required />
-        </div>
-        <div class="form-group">
-          <label>Fecha:</label>
-          <input type="date" id="editReturnDate" value="${ret.date}" required />
-        </div>
-        <div class="form-group">
-          <label>Nota:</label>
-          <input type="text" id="editReturnNote" value="${ret.note || ''}" />
-        </div>
-        <button id="btnUpdateReturn" class="btn-primary">Guardar</button>
-      `;
-      openModal('Editar Rendimiento', form);
-      document.getElementById('btnUpdateReturn').onclick = async () => {
-        const accountId = parseInt(document.getElementById('editReturnAccount').value);
-        const returnType = document.getElementById('editReturnType').value;
-        const amount = parseFloat(document.getElementById('editReturnAmount').value);
-        const date = document.getElementById('editReturnDate').value;
-        const note = document.getElementById('editReturnNote').value.trim() || null;
-        if (isNaN(amount) || amount <= 0 || !isDateValidAndNotFuture(date)) {
-          showToast('Datos inválidos.');
-          return;
-        }
-        await db.returns.update(id, { accountId, amount, date, returnType, note });
-        document.getElementById('modalOverlay').style.display = 'none';
-        showReturnsList();
-      };
-    }
-  };
-      }
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
 }
