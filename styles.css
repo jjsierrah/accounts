@@ -562,26 +562,6 @@ h2 {
 .drawer-menu button span {
   flex: 1;
 }
-/* Paleta de colores */
-.color-palette {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.color-option {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid #aaa;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.color-option:hover {
-  transform: scale(1.1);
-}
 
 /* Toggle para Cuenta de Valores */
 .value-account-toggle {
