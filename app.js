@@ -448,7 +448,10 @@ async function showAddAccountForm() {
     </div>
     <div class="form-group">
       <label>Cuenta de Valores</label>
-      <input type="checkbox" id="isValueAccount" style="width: auto; margin-left: 8px; vertical-align: middle;">
+      <label id="isValueAccountLabel" class="value-account-toggle" style="display: inline-block; padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; user-select: none; background-color: #f0f0f0; color: #333;">
+        <input type="checkbox" id="isValueAccount" style="display: none;">
+        <span>🏷️ No</span>
+      </label>
     </div>
     <div class="form-group">
       <label>Nº de Cuenta (IBAN):</label>
@@ -471,6 +474,16 @@ async function showAddAccountForm() {
     <div class="form-group">
       <label>Color de tarjeta:</label>
       <input type="color" id="color" value="#1a73e8" />
+      <div class="color-palette">
+        <div class="color-option" style="background-color: #005e5e;" data-color="#005e5e"></div> <!-- BBVA -->
+        <div class="color-option" style="background-color: #02754b;" data-color="#02754b;"></div> <!-- ING -->
+        <div class="color-option" style="background-color: #f58220;" data-color="#f58220;"></div> <!-- N26 -->
+        <div class="color-option" style="background-color: #007bc2;" data-color="#007bc2;"></div> <!-- Santander -->
+        <div class="color-option" style="background-color: #000000;" data-color="#000000;"></div> <!-- Negro -->
+        <div class="color-option" style="background-color: #f1c40f;" data-color="#f1c40f;"></div> <!-- Amarillo -->
+        <div class="color-option" style="background-color: #002d72;" data-color="#002d72;"></div> <!-- Trade Republic -->
+        <div class="color-option" style="background-color: #5850ec;" data-color="#5850ec;"></div> <!-- Revolut -->
+      </div>
     </div>
     <div class="form-group">
       <label>Nota:</label>
@@ -479,19 +492,35 @@ async function showAddAccountForm() {
     <button id="btnSaveAccount" class="btn-primary">Añadir Cuenta</button>
   `;
   openModal('Añadir Cuenta', form);
-  document.getElementById('isValueAccount').onchange = (e) => {
+
+  // Lógica para el toggle de "Cuenta de Valores"
+  const toggleLabel = document.getElementById('isValueAccountLabel');
+  const checkbox = document.getElementById('isValueAccount');
+  toggleLabel.onclick = () => {
+    checkbox.checked = !checkbox.checked;
+    toggleLabel.querySelector('span').textContent = checkbox.checked ? '🏷️ Sí' : '🏷️ No';
+    // Actualizar placeholder del número de cuenta
     const accountNumberInput = document.getElementById('accountNumber');
-    if (e.target.checked) {
+    if (checkbox.checked) {
       accountNumberInput.placeholder = "Ej: DE000A12B3C4";
     } else {
       accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
     }
   };
+
+  // Lógica para la paleta de colores
+  document.querySelectorAll('.color-option').forEach(option => {
+    option.onclick = () => {
+      const color = option.dataset.color;
+      document.getElementById('color').value = color;
+    };
+  });
+
   document.getElementById('btnSaveAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
     const accountNumber = document.getElementById('accountNumber').value.trim();
-    const isValueAccount = document.getElementById('isValueAccount').checked;
+    const isValueAccount = checkbox.checked; // Usar el checkbox
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
@@ -533,7 +562,10 @@ async function openEditAccountForm(acc) {
     </div>
     <div class="form-group">
       <label>Cuenta de Valores</label>
-      <input type="checkbox" id="isValueAccount" ${acc.isValueAccount ? 'checked' : ''} style="width: auto; margin-left: 8px; vertical-align: middle;">
+      <label id="isValueAccountLabel" class="value-account-toggle" style="display: inline-block; padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; user-select: none; background-color: #f0f0f0; color: #333;">
+        <input type="checkbox" id="isValueAccount" ${acc.isValueAccount ? 'checked' : ''} style="display: none;">
+        <span>🏷️ ${acc.isValueAccount ? 'Sí' : 'No'}</span>
+      </label>
     </div>
     <div class="form-group">
       <label>Nº de Cuenta (IBAN):</label>
@@ -556,6 +588,16 @@ async function openEditAccountForm(acc) {
     <div class="form-group">
       <label>Color de tarjeta:</label>
       <input type="color" id="color" value="${acc.color || '#1a73e8'}" />
+      <div class="color-palette">
+        <div class="color-option" style="background-color: #005e5e;" data-color="#005e5e"></div> <!-- BBVA -->
+        <div class="color-option" style="background-color: #02754b;" data-color="#02754b;"></div> <!-- ING -->
+        <div class="color-option" style="background-color: #f58220;" data-color="#f58220;"></div> <!-- N26 -->
+        <div class="color-option" style="background-color: #007bc2;" data-color="#007bc2;"></div> <!-- Santander -->
+        <div class="color-option" style="background-color: #000000;" data-color="#000000;"></div> <!-- Negro -->
+        <div class="color-option" style="background-color: #f1c40f;" data-color="#f1c40f;"></div> <!-- Amarillo -->
+        <div class="color-option" style="background-color: #002d72;" data-color="#002d72;"></div> <!-- Trade Republic -->
+        <div class="color-option" style="background-color: #5850ec;" data-color="#5850ec;"></div> <!-- Revolut -->
+      </div>
     </div>
     <div class="form-group">
       <label>Nota:</label>
@@ -573,19 +615,34 @@ async function openEditAccountForm(acc) {
     modalContent.style.borderLeft = '4px solid #1a73e8'; // Color por defecto
   }
 
-  document.getElementById('isValueAccount').onchange = (e) => {
+  // Lógica para el toggle de "Cuenta de Valores"
+  const toggleLabel = document.getElementById('isValueAccountLabel');
+  const checkbox = document.getElementById('isValueAccount');
+  toggleLabel.onclick = () => {
+    checkbox.checked = !checkbox.checked;
+    toggleLabel.querySelector('span').textContent = checkbox.checked ? '🏷️ Sí' : '🏷️ No';
+    // Actualizar placeholder del número de cuenta
     const accountNumberInput = document.getElementById('accountNumber');
-    if (e.target.checked) {
+    if (checkbox.checked) {
       accountNumberInput.placeholder = "Ej: DE000A12B3C4";
     } else {
       accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
     }
   };
+
+  // Lógica para la paleta de colores
+  document.querySelectorAll('.color-option').forEach(option => {
+    option.onclick = () => {
+      const color = option.dataset.color;
+      document.getElementById('color').value = color;
+    };
+  });
+
   document.getElementById('btnUpdateAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
     const accountNumber = document.getElementById('accountNumber').value.trim();
-    const isValueAccount = document.getElementById('isValueAccount').checked;
+    const isValueAccount = checkbox.checked; // Usar el checkbox
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
     const currentBalance = parseFloat(document.getElementById('currentBalance').value);
