@@ -562,3 +562,43 @@ h2 {
 .drawer-menu button span {
   flex: 1;
 }
+/* Paleta de colores */
+.color-palette {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.color-option {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #aaa;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+}
+
+/* Toggle para Cuenta de Valores */
+.value-account-toggle {
+  font-size: 0.95rem;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.value-account-toggle:hover {
+  background-color: #e0e0e0;
+}
+
+[data-theme="dark"] .value-account-toggle {
+  background-color: #3a3a3a;
+  color: #f0f0f0;
+  border-color: #555;
+}
+
+[data-theme="dark"] .value-account-toggle:hover {
+  background-color: #4a4a4a;
+}
