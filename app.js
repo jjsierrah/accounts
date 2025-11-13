@@ -377,12 +377,63 @@ async function renderAccountsSummary() {
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
 }
+
+// --- FUNCIÓN ACTUALIZADA ---
+async function showAccountList() {
+  const accounts = await db.accounts.toArray();
+  if (accounts.length === 0) {
+    openModal('Cuentas', '<p>No hay cuentas. Añade una desde el menú.</p>');
+    return;
+  }
+  let html = '<h3>Cuentas</h3>';
+  accounts.forEach(acc => {
+    const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
+    const borderColorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+    const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
+    html += `
+      <div class="asset-item" style="${borderColorStyle}">
+        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
+        ${accountNumberDisplay ? `Nº: ${accountNumberDisplay}<br>` : ''}
+        Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
+        Saldo: ${formatCurrency(acc.currentBalance)}<br>
+        ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
+        ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
+        <div class="modal-actions">
+          <button class="btn-edit" data-id="${acc.id}">Editar</button>
+          <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
+        </div>
+      </div>
+    `;
+  });
+  openModal('Cuentas', html);
+  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
+    if (e.target.classList.contains('btn-delete')) {
+      const id = parseInt(e.target.dataset.id);
+      showConfirm('¿Eliminar esta cuenta? (Los rendimientos asociados no se borrarán)', async () => {
+        await db.accounts.delete(id); // Solo se borra la cuenta
+        showAccountList(); // Actualiza la lista
+      });
+    }
+    if (e.target.classList.contains('btn-edit')) {
+      const id = parseInt(e.target.dataset.id);
+      const acc = await db.accounts.get(id);
+      if (!acc) return;
+      openEditAccountForm(acc);
+    }
+  };
+}
 // --- FORMULARIOS ---
 async function showAddAccountForm() {
+  // Obtener entidades existentes para datalist
+  const allAccounts = await db.accounts.toArray();
+  const banks = [...new Set(allAccounts.map(a => a.bank))];
+  const bankOptions = banks.map(b => `<option value="${b}">`).join('');
+
   const form = `
     <div class="form-group">
       <label>Entidad:</label>
-      <input type="text" id="bank" placeholder="Ej: BBVA, Santander..." required />
+      <input type="text" id="bank" list="banks" placeholder="Ej: BBVA, Santander..." required />
+      <datalist id="banks">${bankOptions}</datalist>
     </div>
     <div class="form-group">
       <label>Descripción:</label>
@@ -393,14 +444,14 @@ async function showAddAccountForm() {
       <input type="text" id="accountNumber" placeholder="Ej: ES12 1234 5678 9012 3456 7890" />
     </div>
     <div class="form-group">
-      <label><input type="checkbox" id="isValueAccount"> Cuenta de Valores</label>
+      <label>Cuenta de Valores <input type="checkbox" id="isValueAccount" style="width: auto; margin-left: 4px; transform: scale(0.8);"></label>
     </div>
     <div class="form-group">
       <label>Titular principal:</label>
       <input type="text" id="holder" required />
     </div>
     <div class="form-group">
-      <label>Segundo titular (opcional):</label>
+      <label>Segundo titular:</label>
       <input type="text" id="holder2" />
     </div>
     <div class="form-group">
@@ -446,55 +497,18 @@ async function showAddAccountForm() {
   };
 }
 
-async function showAccountList() {
-  const accounts = await db.accounts.toArray();
-  if (accounts.length === 0) {
-    openModal('Cuentas', '<p>No hay cuentas. Añade una desde el menú.</p>');
-    return;
-  }
-  let html = '<h3>Cuentas</h3>';
-  accounts.forEach(acc => {
-    const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
-    const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
-    html += `
-      <div class="asset-item">
-        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-        ${accountNumberDisplay ? `Nº: ${accountNumberDisplay}<br>` : ''}
-        Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
-        Saldo: ${formatCurrency(acc.currentBalance)}<br>
-        ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
-        ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
-        <div class="modal-actions">
-          <button class="btn-edit" data-id="${acc.id}">Editar</button>
-          <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
-        </div>
-      </div>
-    `;
-  });
-  openModal('Cuentas', html);
-  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
-    if (e.target.classList.contains('btn-delete')) {
-      const id = parseInt(e.target.dataset.id);
-      showConfirm('¿Eliminar esta cuenta y sus rendimientos?', async () => {
-        await db.accounts.delete(id);
-        await db.returns.where('accountId').equals(id).delete();
-        showAccountList(); // Actualiza la lista
-      });
-    }
-    if (e.target.classList.contains('btn-edit')) {
-      const id = parseInt(e.target.dataset.id);
-      const acc = await db.accounts.get(id);
-      if (!acc) return;
-      openEditAccountForm(acc);
-    }
-  };
-}
-
+// --- FUNCIÓN ACTUALIZADA ---
 async function openEditAccountForm(acc) {
+  // Obtener entidades existentes para datalist
+  const allAccounts = await db.accounts.toArray();
+  const banks = [...new Set(allAccounts.map(a => a.bank))];
+  const bankOptions = banks.map(b => `<option value="${b}">`).join('');
+
   const form = `
     <div class="form-group">
       <label>Entidad:</label>
-      <input type="text" id="bank" value="${acc.bank}" required />
+      <input type="text" id="bank" list="banks" value="${acc.bank}" required />
+      <datalist id="banks">${bankOptions}</datalist>
     </div>
     <div class="form-group">
       <label>Descripción:</label>
@@ -505,14 +519,14 @@ async function openEditAccountForm(acc) {
       <input type="text" id="accountNumber" value="${acc.accountNumber || ''}" />
     </div>
     <div class="form-group">
-      <label><input type="checkbox" id="isValueAccount" ${acc.isValueAccount ? 'checked' : ''}> Cuenta de Valores</label>
+      <label>Cuenta de Valores <input type="checkbox" id="isValueAccount" ${acc.isValueAccount ? 'checked' : ''} style="width: auto; margin-left: 4px; transform: scale(0.8);"></label>
     </div>
     <div class="form-group">
       <label>Titular principal:</label>
       <input type="text" id="holder" value="${acc.holder}" required />
     </div>
     <div class="form-group">
-      <label>Segundo titular (opcional):</label>
+      <label>Segundo titular:</label>
       <input type="text" id="holder2" value="${acc.holder2 || ''}" />
     </div>
     <div class="form-group">
@@ -530,6 +544,15 @@ async function openEditAccountForm(acc) {
     <button id="btnUpdateAccount" class="btn-primary">Guardar Cambios</button>
   `;
   openModal('Editar Cuenta', form);
+
+  // Aplicar color al borde de la tarjeta del modal
+  const modalContent = document.querySelector('#modalOverlay .modal-content');
+  if (modalContent && acc.color) {
+    modalContent.style.borderLeft = `4px solid ${acc.color}`;
+  } else if (modalContent) {
+    modalContent.style.borderLeft = '4px solid #1a73e8'; // Color por defecto
+  }
+
   document.getElementById('isValueAccount').onchange = (e) => {
     const accountNumberInput = document.getElementById('accountNumber');
     if (e.target.checked) {
@@ -708,7 +731,7 @@ async function showReturnsList() {
       };
     }
   };
-}
+      }
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
 }
