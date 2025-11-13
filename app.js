@@ -473,17 +473,17 @@ async function showAddAccountForm() {
     </div>
     <div class="form-group">
       <label>Color de tarjeta:</label>
-      <input type="color" id="color" value="#1a73e8" />
-      <div class="color-palette">
-        <div class="color-option" style="background-color: #005e5e;" data-color="#005e5e"></div> <!-- BBVA -->
-        <div class="color-option" style="background-color: #02754b;" data-color="#02754b;"></div> <!-- ING -->
-        <div class="color-option" style="background-color: #f58220;" data-color="#f58220;"></div> <!-- N26 -->
-        <div class="color-option" style="background-color: #007bc2;" data-color="#007bc2;"></div> <!-- Santander -->
-        <div class="color-option" style="background-color: #000000;" data-color="#000000;"></div> <!-- Negro -->
-        <div class="color-option" style="background-color: #f1c40f;" data-color="#f1c40f;"></div> <!-- Amarillo -->
-        <div class="color-option" style="background-color: #002d72;" data-color="#002d72;"></div> <!-- Trade Republic -->
-        <div class="color-option" style="background-color: #5850ec;" data-color="#5850ec;"></div> <!-- Revolut -->
-      </div>
+      <input type="color" id="color" value="#1a73e8" list="colorPalette">
+      <datalist id="colorPalette">
+        <option value="#005e5e"></option> <!-- BBVA -->
+        <option value="#02754b"></option> <!-- ING -->
+        <option value="#f58220"></option> <!-- N26 -->
+        <option value="#007bc2"></option> <!-- Santander -->
+        <option value="#000000"></option> <!-- Negro -->
+        <option value="#f1c40f"></option> <!-- Amarillo -->
+        <option value="#002d72"></option> <!-- Trade Republic -->
+        <option value="#5850ec"></option> <!-- Revolut -->
+      </datalist>
     </div>
     <div class="form-group">
       <label>Nota:</label>
@@ -507,14 +507,6 @@ async function showAddAccountForm() {
       accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
     }
   };
-
-  // Lógica para la paleta de colores
-  document.querySelectorAll('.color-option').forEach(option => {
-    option.onclick = () => {
-      const color = option.dataset.color;
-      document.getElementById('color').value = color;
-    };
-  });
 
   document.getElementById('btnSaveAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
@@ -587,17 +579,17 @@ async function openEditAccountForm(acc) {
     </div>
     <div class="form-group">
       <label>Color de tarjeta:</label>
-      <input type="color" id="color" value="${acc.color || '#1a73e8'}" />
-      <div class="color-palette">
-        <div class="color-option" style="background-color: #005e5e;" data-color="#005e5e"></div> <!-- BBVA -->
-        <div class="color-option" style="background-color: #02754b;" data-color="#02754b;"></div> <!-- ING -->
-        <div class="color-option" style="background-color: #f58220;" data-color="#f58220;"></div> <!-- N26 -->
-        <div class="color-option" style="background-color: #007bc2;" data-color="#007bc2;"></div> <!-- Santander -->
-        <div class="color-option" style="background-color: #000000;" data-color="#000000;"></div> <!-- Negro -->
-        <div class="color-option" style="background-color: #f1c40f;" data-color="#f1c40f;"></div> <!-- Amarillo -->
-        <div class="color-option" style="background-color: #002d72;" data-color="#002d72;"></div> <!-- Trade Republic -->
-        <div class="color-option" style="background-color: #5850ec;" data-color="#5850ec;"></div> <!-- Revolut -->
-      </div>
+      <input type="color" id="color" value="${acc.color || '#1a73e8'}" list="colorPalette">
+      <datalist id="colorPalette">
+        <option value="#005e5e"></option> <!-- BBVA -->
+        <option value="#02754b"></option> <!-- ING -->
+        <option value="#f58220"></option> <!-- N26 -->
+        <option value="#007bc2"></option> <!-- Santander -->
+        <option value="#000000"></option> <!-- Negro -->
+        <option value="#f1c40f"></option> <!-- Amarillo -->
+        <option value="#002d72"></option> <!-- Trade Republic -->
+        <option value="#5850ec"></option> <!-- Revolut -->
+      </datalist>
     </div>
     <div class="form-group">
       <label>Nota:</label>
@@ -629,14 +621,6 @@ async function openEditAccountForm(acc) {
       accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
     }
   };
-
-  // Lógica para la paleta de colores
-  document.querySelectorAll('.color-option').forEach(option => {
-    option.onclick = () => {
-      const color = option.dataset.color;
-      document.getElementById('color').value = color;
-    };
-  });
 
   document.getElementById('btnUpdateAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
