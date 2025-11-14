@@ -245,15 +245,14 @@ async function renderAccountsSummary() {
           html += `</div>`;
         }
 
-        // Botón detalle
+        // Botón detalle y selector de año (juntos)
         html += `
-          <button id="toggle${title.replace(/\s+/g, '')}Detail" class="btn-primary" style="margin-top:12px; padding:10px; font-size:0.95rem; width:auto;">
-            Ver detalle
-          </button>
-          <div id="${title.replace(/\s+/g, '')}Detail" style="display:none; margin-top:12px;">
-            <label for="filterYear${title.replace(/\s+/g, '')}">Filtrar por año:</label>
-            <select id="filterYear${title.replace(/\s+/g, '')}" class="year-filter" style="margin-bottom: 10px;">
-              <option value="">Todos los años</option>
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
+            <button id="toggle${title.replace(/\s+/g, '')}Detail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
+              Ver detalle
+            </button>
+            <select id="filterYear${title.replace(/\s+/g, '')}" class="year-filter" style="padding: 6px; font-size: 0.95rem;">
+              <option value="">Todos</option>
         `;
         const allYears = [...new Set(list.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
         for (const year of allYears) {
@@ -261,6 +260,8 @@ async function renderAccountsSummary() {
         }
         html += `
             </select>
+          </div>
+          <div id="${title.replace(/\s+/g, '')}Detail" style="display:none; margin-top:12px;">
             <div id="filteredDetail${title.replace(/\s+/g, '')}"></div>
           </div>
         `;
@@ -398,7 +399,12 @@ async function renderAccountsSummary() {
           if (!acc) continue;
           const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
           const amount = byAccount[accId];
-          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}</div>`;
+          // CORRECCIÓN: Detalle de cuentas sin negrita
+          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}`;
+          if (title === 'Dividendos') {
+            // No se muestra neto
+          }
+          html += `</div>`;
         }
         detailDiv.innerHTML = html;
     }
@@ -736,7 +742,7 @@ async function openEditAccountForm(acc) {
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
-    }
+}
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
@@ -937,8 +943,7 @@ async function showReturnsList() {
       };
     }
   };
-            }
-
+}
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
 }
