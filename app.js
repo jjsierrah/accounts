@@ -46,11 +46,12 @@ function formatCurrency(value) {
 }
 
 function formatNumber(value) {
+  // Cambio aquí: formato numérico con punto para miles y coma para decimales
   return new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     useGrouping: true
-  }).format(value);
+  }).format(value).replace(/\./g, '#TEMP_DOT#').replace(',', '.').replace(/#TEMP_DOT#/g, ',');
 }
 
 // --- FORMATO IBAN ---
@@ -285,9 +286,10 @@ async function renderAccountsSummary() {
       const holderLine = acc.holder2 ? `${acc.holder}<span style="font-size: 1rem;"> / ${acc.holder2}</span>` : acc.holder; // Titular 2 mismo tamaño
       const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en el texto principal
       const borderColorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+      const isValueAccountClass = acc.isValueAccount ? ' value-account' : ''; // Clase para borde completo
       const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
       fullHtml += `
-        <div class="asset-item" style="${borderColorStyle}" data-id="${acc.id}" draggable="true">
+        <div class="asset-item${isValueAccountClass}" style="${borderColorStyle}" data-id="${acc.id}" draggable="true">
           <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
           ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
           Titular: ${holderLine}<br>
@@ -421,8 +423,8 @@ async function showAccountList() {
       openEditAccountForm(acc);
     }
   };
-}
-// --- FORMULARIOS ---
+            }
+// --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
   const allAccounts = await db.accounts.toArray();
@@ -469,7 +471,7 @@ async function showAddAccountForm() {
     </div>
     <div class="form-group">
       <label>Saldo actual (€):</label>
-      <input type="number" id="currentBalance" step="any" min="0" required />
+      <input type="text" id="currentBalance" placeholder="0,00" required />
     </div>
     <div class="form-group">
       <label>Color de tarjeta:</label>
@@ -508,6 +510,26 @@ async function showAddAccountForm() {
     }
   };
 
+  // Lógica para el input de saldo con formato
+  const balanceInput = document.getElementById('currentBalance');
+  let lastValue = '';
+  balanceInput.addEventListener('input', (e) => {
+    let value = e.target.value.replace(/[^\d,]/g, '');
+    const parts = value.split(',');
+    if (parts.length > 2) {
+      value = parts[0] + ',' + parts.slice(1).join('');
+    }
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
+  });
+
   document.getElementById('btnSaveAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
@@ -515,10 +537,21 @@ async function showAddAccountForm() {
     const isValueAccount = checkbox.checked; // Usar el checkbox
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
-    const currentBalance = parseFloat(document.getElementById('currentBalance').value);
+    let currentBalanceStr = balanceInput.value.trim();
+    if (currentBalanceStr === '') {
+      showToast('El saldo no puede estar vacío.');
+      return;
+    }
+    // Convertir de nuevo a número con coma como decimal
+    currentBalanceStr = currentBalanceStr.replace(/\./g, '').replace(',', '.');
+    const currentBalance = parseFloat(currentBalanceStr);
+    if (isNaN(currentBalance)) {
+      showToast('Saldo inválido.');
+      return;
+    }
     const color = document.getElementById('color').value;
     const note = document.getElementById('note').value.trim() || null;
-    if (!bank || !holder || !accountNumber || isNaN(currentBalance)) {
+    if (!bank || !holder || !accountNumber) {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
@@ -541,6 +574,9 @@ async function openEditAccountForm(acc) {
     ...allAccounts.map(a => a.holder2).filter(h => h)
   ])];
   const holderOptions = holders.map(h => `<option value="${h}">`).join('');
+
+  // Formatear saldo para mostrarlo en el input
+  const formattedBalance = formatNumber(acc.currentBalance);
 
   const form = `
     <div class="form-group">
@@ -575,7 +611,7 @@ async function openEditAccountForm(acc) {
     </div>
     <div class="form-group">
       <label>Saldo actual (€):</label>
-      <input type="number" id="currentBalance" step="any" min="0" value="${acc.currentBalance}" required />
+      <input type="text" id="currentBalance" value="${formattedBalance}" required />
     </div>
     <div class="form-group">
       <label>Color de tarjeta:</label>
@@ -622,6 +658,26 @@ async function openEditAccountForm(acc) {
     }
   };
 
+  // Lógica para el input de saldo con formato
+  const balanceInput = document.getElementById('currentBalance');
+  let lastValue = balanceInput.value;
+  balanceInput.addEventListener('input', (e) => {
+    let value = e.target.value.replace(/[^\d,]/g, '');
+    const parts = value.split(',');
+    if (parts.length > 2) {
+      value = parts[0] + ',' + parts.slice(1).join('');
+    }
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
+  });
+
   document.getElementById('btnUpdateAccount').onclick = async () => {
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
@@ -629,10 +685,21 @@ async function openEditAccountForm(acc) {
     const isValueAccount = checkbox.checked; // Usar el checkbox
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
-    const currentBalance = parseFloat(document.getElementById('currentBalance').value);
+    let currentBalanceStr = balanceInput.value.trim();
+    if (currentBalanceStr === '') {
+      showToast('El saldo no puede estar vacío.');
+      return;
+    }
+    // Convertir de nuevo a número con coma como decimal
+    currentBalanceStr = currentBalanceStr.replace(/\./g, '').replace(',', '.');
+    const currentBalance = parseFloat(currentBalanceStr);
+    if (isNaN(currentBalance)) {
+      showToast('Saldo inválido.');
+      return;
+    }
     const color = document.getElementById('color').value;
     const note = document.getElementById('note').value.trim() || null;
-    if (!bank || !holder || !accountNumber || isNaN(currentBalance)) {
+    if (!bank || !holder || !accountNumber) {
       showToast('Completa todos los campos obligatorios.');
       return;
     }
@@ -640,8 +707,8 @@ async function openEditAccountForm(acc) {
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
-}
-
+    }
+// --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
   const accounts = await db.accounts.toArray();
@@ -667,7 +734,7 @@ async function showAddReturnForm() {
     </div>
     <div class="form-group">
       <label>Importe (€):</label>
-      <input type="number" id="returnAmount" step="any" min="0" required />
+      <input type="text" id="returnAmount" placeholder="0,00" required />
     </div>
     <div class="form-group">
       <label>Fecha:</label>
@@ -681,18 +748,43 @@ async function showAddReturnForm() {
   `;
   openModal('Añadir Rendimiento', form);
 
-  document.getElementById('btnSaveReturn').onclick = async () => {
-    const accountId = parseInt(document.getElementById('returnAccount').value);
-    const returnType = document.getElementById('returnType').value;
-    const amountStr = document.getElementById('returnAmount').value;
-    const date = document.getElementById('returnDate').value;
-    const note = document.getElementById('returnNote').value.trim() || null;
+  // Lógica para el input de importe con formato
+  const amountInput = document.getElementById('returnAmount');
+  let lastValue = '';
+  amountInput.addEventListener('input', (e) => {
+    let value = e.target.value.replace(/[^\d,]/g, '');
+    const parts = value.split(',');
+    if (parts.length > 2) {
+      value = parts[0] + ',' + parts.slice(1).join('');
+    }
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
+  });
 
+  document.getElementById('btnSaveReturn').onclick = async () => {
+    let amountStr = amountInput.value.trim();
+    if (amountStr === '') {
+      showToast('El importe no puede estar vacío.');
+      return;
+    }
+    // Convertir de nuevo a número con coma como decimal
+    amountStr = amountStr.replace(/\./g, '').replace(',', '.');
     const amount = parseFloat(amountStr);
     if (isNaN(amount) || amount <= 0) {
       showToast('Importe inválido.');
       return;
     }
+    const accountId = parseInt(document.getElementById('returnAccount').value);
+    const returnType = document.getElementById('returnType').value;
+    const date = document.getElementById('returnDate').value;
+    const note = document.getElementById('returnNote').value.trim() || null;
 
     if (!isDateValidAndNotFuture(date)) {
       showToast('La fecha no puede ser futura.');
@@ -750,6 +842,9 @@ async function showReturnsList() {
         const display = a.bank + (a.description ? ` (${a.description})` : '');
         return `<option value="${a.id}" ${a.id === ret.accountId ? 'selected' : ''}>${display}</option>`;
       }).join('');
+      // Formatear importe para mostrarlo en el input
+      const formattedAmount = formatNumber(ret.amount);
+
       const form = `
         <div class="form-group">
           <label>Cuenta:</label>
@@ -764,7 +859,7 @@ async function showReturnsList() {
         </div>
         <div class="form-group">
           <label>Importe (€):</label>
-          <input type="number" id="editReturnAmount" value="${ret.amount}" required />
+          <input type="text" id="editReturnAmount" value="${formattedAmount}" required />
         </div>
         <div class="form-group">
           <label>Fecha:</label>
@@ -777,14 +872,44 @@ async function showReturnsList() {
         <button id="btnUpdateReturn" class="btn-primary">Guardar</button>
       `;
       openModal('Editar Rendimiento', form);
+
+      // Lógica para el input de importe con formato en edición
+      const editAmountInput = document.getElementById('editReturnAmount');
+      editAmountInput.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/[^\d,]/g, '');
+        const parts = value.split(',');
+        if (parts.length > 2) {
+          value = parts[0] + ',' + parts.slice(1).join('');
+        }
+        const [integer, decimal] = value.split(',');
+        if (integer) {
+          const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+          value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+        }
+        if (value !== e.target.value) {
+          e.target.value = value;
+        }
+      });
+
       document.getElementById('btnUpdateReturn').onclick = async () => {
+        let amountStr = editAmountInput.value.trim();
+        if (amountStr === '') {
+          showToast('El importe no puede estar vacío.');
+          return;
+        }
+        // Convertir de nuevo a número con coma como decimal
+        amountStr = amountStr.replace(/\./g, '').replace(',', '.');
+        const amount = parseFloat(amountStr);
+        if (isNaN(amount) || amount <= 0) {
+          showToast('Importe inválido.');
+          return;
+        }
         const accountId = parseInt(document.getElementById('editReturnAccount').value);
         const returnType = document.getElementById('editReturnType').value;
-        const amount = parseFloat(document.getElementById('editReturnAmount').value);
         const date = document.getElementById('editReturnDate').value;
         const note = document.getElementById('editReturnNote').value.trim() || null;
-        if (isNaN(amount) || amount <= 0 || !isDateValidAndNotFuture(date)) {
-          showToast('Datos inválidos.');
+        if (!isDateValidAndNotFuture(date)) {
+          showToast('Fecha inválida.');
           return;
         }
         await db.returns.update(id, { accountId, amount, date, returnType, note });
@@ -793,7 +918,7 @@ async function showReturnsList() {
       };
     }
   };
-      }
+}
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
 }
