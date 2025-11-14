@@ -246,32 +246,25 @@ async function renderAccountsSummary() {
           html += `</div>`;
         }
 
-        // Botón detalle
+        // Botón detalle con filtro por año
         html += `
           <button id="toggle${title.replace(/\s+/g, '')}Detail" class="btn-primary" style="margin-top:12px; padding:10px; font-size:0.95rem; width:auto;">
             Ver detalle
           </button>
           <div id="${title.replace(/\s+/g, '')}Detail" style="display:none; margin-top:12px;">
+            <label for="filterYear${title.replace(/\s+/g, '')}">Filtrar por año:</label>
+            <select id="filterYear${title.replace(/\s+/g, '')}" class="year-filter" style="margin-bottom: 10px;">
+              <option value="">Todos los años</option>
         `;
-        const byAccount = {};
-        for (const r of list) {
-          if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
-          byAccount[r.accountId] += r.amount;
+        const allYears = [...new Set(list.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        for (const year of allYears) {
+            html += `<option value="${year}">${year}</option>`;
         }
-        const accountMap = {};
-        accounts.forEach(a => accountMap[a.id] = a);
-        for (const accId in byAccount) {
-          const acc = accountMap[accId];
-          if (!acc) continue;
-          const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
-          const amount = byAccount[accId];
-          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}`;
-          if (isDividend) {
-            // No se muestra neto
-          }
-          html += `</div>`;
-        }
-        html += `</div></div>`;
+        html += `
+            </select>
+            <div id="filteredDetail${title.replace(/\s+/g, '')}"></div>
+          </div>
+        `;
         return html;
       };
 
@@ -353,7 +346,7 @@ async function renderAccountsSummary() {
       });
     });
 
-    // --- TOGGLES DETALLE ---
+    // --- TOGGLES DETALLE Y FILTRO ---
     const toggleDivBtn = document.getElementById('toggleDividendosDetail');
     if (toggleDivBtn) {
       toggleDivBtn.onclick = function() {
@@ -361,8 +354,13 @@ async function renderAccountsSummary() {
         const isVisible = detail.style.display === 'block';
         detail.style.display = isVisible ? 'none' : 'block';
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
+        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
+            const yearSelect = document.getElementById('filterYearDividendos');
+            if (yearSelect) updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
+        }
       };
     }
+
     const toggleIntBtn = document.getElementById('toggleInteresesDetail');
     if (toggleIntBtn) {
       toggleIntBtn.onclick = function() {
@@ -370,8 +368,57 @@ async function renderAccountsSummary() {
         const isVisible = detail.style.display === 'block';
         detail.style.display = isVisible ? 'none' : 'block';
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
+        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
+            const yearSelect = document.getElementById('filterYearIntereses');
+            if (yearSelect) updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
+        }
       };
     }
+
+    // Lógica de filtro por año
+    function updateDetailByYear(title, selectId, detailId) {
+        const yearSelect = document.getElementById(selectId);
+        const detailDiv = document.getElementById(detailId);
+        if (!yearSelect || !detailDiv) return;
+
+        const selectedYear = yearSelect.value;
+        const allReturns = title === 'Dividendos' ? dividends : interests;
+        const accounts = orderedAccounts; // Usar la lista ordenada de cuentas
+        const accountMap = {};
+        accounts.forEach(a => accountMap[a.id] = a);
+
+        let html = '';
+        const filteredReturns = selectedYear ? allReturns.filter(r => new Date(r.date).getFullYear().toString() === selectedYear) : allReturns;
+        const byAccount = {};
+        for (const r of filteredReturns) {
+          if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
+          byAccount[r.accountId] += r.amount;
+        }
+        for (const accId in byAccount) {
+          const acc = accountMap[accId];
+          if (!acc) continue;
+          const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
+          const amount = byAccount[accId];
+          // CORRECCIÓN: Detalle de cuentas sin negrita
+          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}`;
+          if (title === 'Dividendos') {
+            // No se muestra neto
+          }
+          html += `</div>`;
+        }
+        detailDiv.innerHTML = html;
+    }
+
+    // Eventos de cambio para los selects de filtro
+    const yearSelectDiv = document.getElementById('filterYearDividendos');
+    if (yearSelectDiv) {
+        yearSelectDiv.onchange = () => updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
+    }
+    const yearSelectInt = document.getElementById('filterYearIntereses');
+    if (yearSelectInt) {
+        yearSelectInt.onchange = () => updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
+    }
+
 
   } catch (err) {
     console.error('Error en renderAccountsSummary:', err);
@@ -512,23 +559,22 @@ async function showAddAccountForm() {
 
   // Lógica para el input de saldo con formato
   const balanceInput = document.getElementById('currentBalance');
+  let lastValue = '';
   balanceInput.addEventListener('input', (e) => {
-    // Permitir solo números, comas y puntos
-    let value = e.target.value.replace(/[^\d,.]/g, '');
-    // Si tiene más de una coma, dejar solo la primera
+    let value = e.target.value.replace(/[^\d,]/g, '');
     const parts = value.split(',');
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    // Formatear visualmente (opcional, pero no cambiar el valor real)
     const [integer, decimal] = value.split(',');
     if (integer) {
       const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
       value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
     }
-    // No cambiamos el valor del input, solo lo mostramos formateado
-    // El cálculo se hará con parseFloat(value.replace('.', '').replace(',', '.'))
-    e.target.value = value;
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
   });
 
   document.getElementById('btnSaveAccount').onclick = async () => {
@@ -661,22 +707,22 @@ async function openEditAccountForm(acc) {
 
   // Lógica para el input de saldo con formato
   const balanceInput = document.getElementById('currentBalance');
+  let lastValue = balanceInput.value;
   balanceInput.addEventListener('input', (e) => {
-    // Permitir solo números, comas y puntos
-    let value = e.target.value.replace(/[^\d,.]/g, '');
-    // Si tiene más de una coma, dejar solo la primera
+    let value = e.target.value.replace(/[^\d,]/g, '');
     const parts = value.split(',');
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    // Formatear visualmente (opcional, pero no cambiar el valor real)
     const [integer, decimal] = value.split(',');
     if (integer) {
       const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
       value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
     }
-    // No cambiamos el valor del input, solo lo mostramos formateado
-    e.target.value = value;
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
   });
 
   document.getElementById('btnUpdateAccount').onclick = async () => {
@@ -751,22 +797,22 @@ async function showAddReturnForm() {
 
   // Lógica para el input de importe con formato
   const amountInput = document.getElementById('returnAmount');
+  let lastValue = '';
   amountInput.addEventListener('input', (e) => {
-    // Permitir solo números, comas y puntos
-    let value = e.target.value.replace(/[^\d,.]/g, '');
-    // Si tiene más de una coma, dejar solo la primera
+    let value = e.target.value.replace(/[^\d,]/g, '');
     const parts = value.split(',');
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    // Formatear visualmente (opcional, pero no cambiar el valor real)
     const [integer, decimal] = value.split(',');
     if (integer) {
       const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
       value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
     }
-    // No cambiamos el valor del input, solo lo mostramos formateado
-    e.target.value = value;
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
   });
 
   document.getElementById('btnSaveReturn').onclick = async () => {
@@ -877,21 +923,19 @@ async function showReturnsList() {
       // Lógica para el input de importe con formato en edición
       const editAmountInput = document.getElementById('editReturnAmount');
       editAmountInput.addEventListener('input', (e) => {
-        // Permitir solo números, comas y puntos
-        let value = e.target.value.replace(/[^\d,.]/g, '');
-        // Si tiene más de una coma, dejar solo la primera
+        let value = e.target.value.replace(/[^\d,]/g, '');
         const parts = value.split(',');
         if (parts.length > 2) {
           value = parts[0] + ',' + parts.slice(1).join('');
         }
-        // Formatear visualmente (opcional, pero no cambiar el valor real)
         const [integer, decimal] = value.split(',');
         if (integer) {
           const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
           value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
         }
-        // No cambiamos el valor del input, solo lo mostramos formateado
-        e.target.value = value;
+        if (value !== e.target.value) {
+          e.target.value = value;
+        }
       });
 
       document.getElementById('btnUpdateReturn').onclick = async () => {
