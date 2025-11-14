@@ -22,7 +22,7 @@ function isDateValidAndNotFuture(dateString) {
   if (!dateString) return false;
   const inputDate = new Date(dateString);
   const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  todayStart.setHours(23, 59, 59, 999); // Fin del día de hoy
   return inputDate <= todayStart;
 }
 
@@ -252,26 +252,18 @@ async function renderAccountsSummary() {
             Ver detalle
           </button>
           <div id="${title.replace(/\s+/g, '')}Detail" style="display:none; margin-top:12px;">
+            <select id="filterYear${title.replace(/\s+/g, '')}" class="year-filter" style="margin-bottom: 10px;">
+              <option value="">Todos los años</option>
         `;
-        const byAccount = {};
-        for (const r of list) {
-          if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
-          byAccount[r.accountId] += r.amount;
+        const allYears = [...new Set(list.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        for (const year of allYears) {
+            html += `<option value="${year}">${year}</option>`;
         }
-        const accountMap = {};
-        accounts.forEach(a => accountMap[a.id] = a);
-        for (const accId in byAccount) {
-          const acc = accountMap[accId];
-          if (!acc) continue;
-          const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
-          const amount = byAccount[accId];
-          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}`;
-          if (isDividend) {
-            // No se muestra neto
-          }
-          html += `</div>`;
-        }
-        html += `</div></div>`;
+        html += `
+            </select>
+            <div id="filteredDetail${title.replace(/\s+/g, '')}"></div>
+          </div>
+        `;
         return html;
       };
 
@@ -353,7 +345,7 @@ async function renderAccountsSummary() {
       });
     });
 
-    // --- TOGGLES DETALLE ---
+    // --- TOGGLES DETALLE Y FILTRO ---
     const toggleDivBtn = document.getElementById('toggleDividendosDetail');
     if (toggleDivBtn) {
       toggleDivBtn.onclick = function() {
@@ -361,8 +353,13 @@ async function renderAccountsSummary() {
         const isVisible = detail.style.display === 'block';
         detail.style.display = isVisible ? 'none' : 'block';
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
+        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
+            const yearSelect = document.getElementById('filterYearDividendos');
+            if (yearSelect) updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
+        }
       };
     }
+
     const toggleIntBtn = document.getElementById('toggleInteresesDetail');
     if (toggleIntBtn) {
       toggleIntBtn.onclick = function() {
@@ -370,8 +367,56 @@ async function renderAccountsSummary() {
         const isVisible = detail.style.display === 'block';
         detail.style.display = isVisible ? 'none' : 'block';
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
+        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
+            const yearSelect = document.getElementById('filterYearIntereses');
+            if (yearSelect) updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
+        }
       };
     }
+
+    // Lógica de filtro por año
+    function updateDetailByYear(title, selectId, detailId) {
+        const yearSelect = document.getElementById(selectId);
+        const detailDiv = document.getElementById(detailId);
+        if (!yearSelect || !detailDiv) return;
+
+        const selectedYear = yearSelect.value;
+        const allReturns = title === 'Dividendos' ? dividends : interests;
+        const accounts = orderedAccounts; // Usar la lista ordenada de cuentas
+        const accountMap = {};
+        accounts.forEach(a => accountMap[a.id] = a);
+
+        let html = '';
+        const filteredReturns = selectedYear ? allReturns.filter(r => new Date(r.date).getFullYear().toString() === selectedYear) : allReturns;
+        const byAccount = {};
+        for (const r of filteredReturns) {
+          if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
+          byAccount[r.accountId] += r.amount;
+        }
+        for (const accId in byAccount) {
+          const acc = accountMap[accId];
+          if (!acc) continue;
+          const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
+          const amount = byAccount[accId];
+          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}`;
+          if (title === 'Dividendos') {
+            // No se muestra neto
+          }
+          html += `</div>`;
+        }
+        detailDiv.innerHTML = html;
+    }
+
+    // Eventos de cambio para los selects de filtro
+    const yearSelectDiv = document.getElementById('filterYearDividendos');
+    if (yearSelectDiv) {
+        yearSelectDiv.onchange = () => updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
+    }
+    const yearSelectInt = document.getElementById('filterYearIntereses');
+    if (yearSelectInt) {
+        yearSelectInt.onchange = () => updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
+    }
+
 
   } catch (err) {
     console.error('Error en renderAccountsSummary:', err);
@@ -423,7 +468,7 @@ async function showAccountList() {
       openEditAccountForm(acc);
     }
   };
-            }
+}
 // --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
@@ -477,14 +522,14 @@ async function showAddAccountForm() {
       <label>Color de tarjeta:</label>
       <input type="color" id="color" value="#1a73e8" list="colorPalette">
       <datalist id="colorPalette">
-        <option value="#005e5e"></option> <!-- BBVA -->
-        <option value="#02754b"></option> <!-- ING -->
-        <option value="#f58220"></option> <!-- N26 -->
-        <option value="#007bc2"></option> <!-- Santander -->
-        <option value="#000000"></option> <!-- Negro -->
-        <option value="#f1c40f"></option> <!-- Amarillo -->
-        <option value="#002d72"></option> <!-- Trade Republic -->
-        <option value="#5850ec"></option> <!-- Revolut -->
+        <option value="#091891"></option> <!-- BBVA -->
+        <option value="#fb6405"></option> <!-- ING -->
+        <option value="#04ac94"></option> <!-- N26 -->
+        <option value="#eb0404"></option> <!-- Santander -->
+        <option value="#21da60"></option> <!-- Trade Republic -->
+        <option value="#1496d2"></option> <!-- Revolut -->
+        <option value="#b3dded"></option> <!-- azul grisáceo -->
+        <option value="#f8f49c"></option> <!-- Amarillo -->
       </datalist>
     </div>
     <div class="form-group">
@@ -617,14 +662,14 @@ async function openEditAccountForm(acc) {
       <label>Color de tarjeta:</label>
       <input type="color" id="color" value="${acc.color || '#1a73e8'}" list="colorPalette">
       <datalist id="colorPalette">
-        <option value="#005e5e"></option> <!-- BBVA -->
-        <option value="#02754b"></option> <!-- ING -->
-        <option value="#f58220"></option> <!-- N26 -->
-        <option value="#007bc2"></option> <!-- Santander -->
-        <option value="#000000"></option> <!-- Negro -->
-        <option value="#f1c40f"></option> <!-- Amarillo -->
-        <option value="#002d72"></option> <!-- Trade Republic -->
-        <option value="#5850ec"></option> <!-- Revolut -->
+        <option value="#091891"></option> <!-- BBVA -->
+        <option value="#fb6405"></option> <!-- ING -->
+        <option value="#04ac94"></option> <!-- N26 -->
+        <option value="#eb0404"></option> <!-- Santander -->
+        <option value="#21da60"></option> <!-- Trade Republic -->
+        <option value="#1496d2"></option> <!-- Revolut -->
+        <option value="#b3dded"></option> <!-- azul grisáceo -->
+        <option value="#f8f49c"></option> <!-- Amarillo -->
       </datalist>
     </div>
     <div class="form-group">
@@ -707,7 +752,7 @@ async function openEditAccountForm(acc) {
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
-    }
+}
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
@@ -1053,9 +1098,8 @@ function showHelp() {
       <li>🏷️ Identificación de cuentas de valores</li>
       <li>🎨 Asignación de color a tarjetas</li>
       <li>🔄 Reordenar cuentas con arrastrar y soltar</li>
-      <li>💰 Registro de rendimientos: intereses y dividendos</li>
+      <li>💰 Registro de rendimientos: intereses y dividendos (en bruto)</li>
       <li>📊 Rendimientos con desglose anual visible</li>
-      <li>📊 Dividendos mostrados en bruto</li>
       <li>📊 Separación de saldos: Cuentas y Valores</li>
       <li>🔄 Sin movimientos: solo rendimientos con fecha</li>
       <li>📤 Exportar a JSON</li>
