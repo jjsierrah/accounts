@@ -582,3 +582,8 @@ h2 {
 [data-theme="dark"] .value-account-toggle:hover {
   background-color: #4a4a4a;
 }
+
+/* Borde completo para cuentas de valores */
+.asset-item.value-account {
+  border: 2px solid;
+}
