@@ -46,12 +46,11 @@ function formatCurrency(value) {
 }
 
 function formatNumber(value) {
-  // Cambio aquí: formato numérico con punto para miles y coma para decimales
   return new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     useGrouping: true
-  }).format(value).replace(/\./g, '#TEMP_DOT#').replace(',', '.').replace(/#TEMP_DOT#/g, ',');
+  }).format(value);
 }
 
 // --- FORMATO IBAN ---
@@ -246,7 +245,7 @@ async function renderAccountsSummary() {
           html += `</div>`;
         }
 
-        // Botón detalle con filtro por año
+        // Botón detalle
         html += `
           <button id="toggle${title.replace(/\s+/g, '')}Detail" class="btn-primary" style="margin-top:12px; padding:10px; font-size:0.95rem; width:auto;">
             Ver detalle
@@ -399,12 +398,7 @@ async function renderAccountsSummary() {
           if (!acc) continue;
           const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
           const amount = byAccount[accId];
-          // CORRECCIÓN: Detalle de cuentas sin negrita
-          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}`;
-          if (title === 'Dividendos') {
-            // No se muestra neto
-          }
-          html += `</div>`;
+          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}</div>`;
         }
         detailDiv.innerHTML = html;
     }
@@ -557,24 +551,18 @@ async function showAddAccountForm() {
     }
   };
 
-  // Lógica para el input de saldo con formato
+  // Lógica para el input de saldo (sin formateo visual)
   const balanceInput = document.getElementById('currentBalance');
-  let lastValue = '';
   balanceInput.addEventListener('input', (e) => {
-    let value = e.target.value.replace(/[^\d,]/g, '');
+    // Permitir solo números, comas y puntos
+    let value = e.target.value.replace(/[^\d,.]/g, '');
+    // Si tiene más de una coma, dejar solo la primera
     const parts = value.split(',');
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    const [integer, decimal] = value.split(',');
-    if (integer) {
-      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-    }
-    if (value !== e.target.value) {
-      e.target.value = value;
-    }
-    lastValue = value;
+    // No cambiamos el valor del input, solo lo mostramos tal cual
+    e.target.value = value;
   });
 
   document.getElementById('btnSaveAccount').onclick = async () => {
@@ -705,24 +693,18 @@ async function openEditAccountForm(acc) {
     }
   };
 
-  // Lógica para el input de saldo con formato
+  // Lógica para el input de saldo (sin formateo visual)
   const balanceInput = document.getElementById('currentBalance');
-  let lastValue = balanceInput.value;
   balanceInput.addEventListener('input', (e) => {
-    let value = e.target.value.replace(/[^\d,]/g, '');
+    // Permitir solo números, comas y puntos
+    let value = e.target.value.replace(/[^\d,.]/g, '');
+    // Si tiene más de una coma, dejar solo la primera
     const parts = value.split(',');
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    const [integer, decimal] = value.split(',');
-    if (integer) {
-      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-    }
-    if (value !== e.target.value) {
-      e.target.value = value;
-    }
-    lastValue = value;
+    // No cambiamos el valor del input, solo lo mostramos tal cual
+    e.target.value = value;
   });
 
   document.getElementById('btnUpdateAccount').onclick = async () => {
@@ -754,7 +736,7 @@ async function openEditAccountForm(acc) {
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
-}
+    }
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
@@ -795,24 +777,18 @@ async function showAddReturnForm() {
   `;
   openModal('Añadir Rendimiento', form);
 
-  // Lógica para el input de importe con formato
+  // Lógica para el input de importe (sin formateo visual)
   const amountInput = document.getElementById('returnAmount');
-  let lastValue = '';
   amountInput.addEventListener('input', (e) => {
-    let value = e.target.value.replace(/[^\d,]/g, '');
+    // Permitir solo números, comas y puntos
+    let value = e.target.value.replace(/[^\d,.]/g, '');
+    // Si tiene más de una coma, dejar solo la primera
     const parts = value.split(',');
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    const [integer, decimal] = value.split(',');
-    if (integer) {
-      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-    }
-    if (value !== e.target.value) {
-      e.target.value = value;
-    }
-    lastValue = value;
+    // No cambiamos el valor del input, solo lo mostramos tal cual
+    e.target.value = value;
   });
 
   document.getElementById('btnSaveReturn').onclick = async () => {
@@ -920,22 +896,18 @@ async function showReturnsList() {
       `;
       openModal('Editar Rendimiento', form);
 
-      // Lógica para el input de importe con formato en edición
+      // Lógica para el input de importe (sin formateo visual)
       const editAmountInput = document.getElementById('editReturnAmount');
       editAmountInput.addEventListener('input', (e) => {
-        let value = e.target.value.replace(/[^\d,]/g, '');
+        // Permitir solo números, comas y puntos
+        let value = e.target.value.replace(/[^\d,.]/g, '');
+        // Si tiene más de una coma, dejar solo la primera
         const parts = value.split(',');
         if (parts.length > 2) {
           value = parts[0] + ',' + parts.slice(1).join('');
         }
-        const [integer, decimal] = value.split(',');
-        if (integer) {
-          const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-          value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-        }
-        if (value !== e.target.value) {
-          e.target.value = value;
-        }
+        // No cambiamos el valor del input, solo lo mostramos tal cual
+        e.target.value = value;
       });
 
       document.getElementById('btnUpdateReturn').onclick = async () => {
@@ -965,7 +937,8 @@ async function showReturnsList() {
       };
     }
   };
-}
+            }
+
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
 }
