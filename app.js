@@ -1,10 +1,9 @@
 // --- IndexedDB ---
 const db = new Dexie('JJBankAccountsDB');
-db.version(2).stores({ // Versión actualizada para añadir isValueAccount
+db.version(2).stores({
   accounts: '++id, bank, description, holder, holder2, currentBalance, note, color, accountNumber, isValueAccount',
   returns: '++id, accountId, amount, date, returnType, note'
 }).upgrade(tx => {
-  // Migrar cuentas antiguas: añadir isValueAccount como false
   return tx.accounts.toCollection().modify(acc => {
     if (acc.isValueAccount === undefined) {
       acc.isValueAccount = false;
@@ -140,6 +139,7 @@ function showConfirm(message, onConfirm) {
   };
 }
 
+// --- FUNCIÓN MODAL GENERAL ---
 function openModal(title, content) {
   let overlay = document.getElementById('modalOverlay');
   if (!overlay) {
@@ -162,7 +162,52 @@ function openModal(title, content) {
   overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = 'none'; };
 }
 
-// --- RENDER RESUMEN ---
+// --- FUNCIÓN ACTUALIZADA ---
+async function showAccountList() {
+  const accounts = await db.accounts.toArray();
+  if (accounts.length === 0) {
+    openModal('Cuentas', '<p>No hay cuentas. Añade una desde el menú.</p>');
+    return;
+  }
+  let html = '<h3>Cuentas</h3>';
+  accounts.forEach(acc => {
+    const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
+    const borderColorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+    const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
+    html += `
+      <div class="asset-item" style="${borderColorStyle}">
+        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
+        ${accountNumberDisplay ? `Nº: ${accountNumberDisplay}<br>` : ''}
+        Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
+        Saldo: ${formatCurrency(acc.currentBalance)}<br>
+        ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
+        ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
+        <div class="modal-actions">
+          <button class="btn-edit" data-id="${acc.id}">Editar</button>
+          <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
+        </div>
+      </div>
+    `;
+  });
+  openModal('Cuentas', html);
+  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
+    if (e.target.classList.contains('btn-delete')) {
+      const id = parseInt(e.target.dataset.id);
+      showConfirm('¿Eliminar esta cuenta? (Los rendimientos asociados no se borrarán)', async () => {
+        await db.accounts.delete(id); // Solo se borra la cuenta
+        showAccountList(); // Actualiza la lista
+      });
+    }
+    if (e.target.classList.contains('btn-edit')) {
+      const id = parseInt(e.target.dataset.id);
+      const acc = await db.accounts.get(id);
+      if (!acc) return;
+      openEditAccountForm(acc);
+    }
+  };
+}
+
+// --- RENDER RESUMEN PRINCIPAL ---
 async function renderAccountsSummary() {
   const summaryTotals = document.getElementById('summary-totals');
   const summaryContainer = document.getElementById('summary-by-bank');
@@ -210,98 +255,66 @@ async function renderAccountsSummary() {
     const returns = await db.returns.toArray();
     let fullHtml = '';
 
-    // --- SECCIÓN DE DIVIDENDOS ---
-    const dividends = returns.filter(r => r.returnType === 'dividend');
-    if (dividends.length > 0) {
-      let totalBruto = dividends.reduce((sum, r) => sum + r.amount, 0);
-      fullHtml += `<div class="summary-card returns-section"><div class="group-title">Dividendos</div>`;
-      fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
+    if (returns.length > 0) {
+      const dividends = returns.filter(r => r.returnType === 'dividend');
+      const interests = returns.filter(r => r.returnType === 'interest');
 
-      // Por año (siempre visible)
-      const byYear = {};
-      for (const r of dividends) {
-        const year = new Date(r.date).getFullYear();
-        if (!byYear[year]) byYear[year] = 0;
-        byYear[year] += r.amount;
-      }
-      if (Object.keys(byYear).length > 0) { // Mostrar siempre si hay años
-        fullHtml += `<div class="dividends-by-year">`;
-        const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
-        for (const year of sortedYears) {
-          const bruto = byYear[year];
-          fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
+      const processType = (list, title, isDividend = false) => {
+        if (list.length === 0) return '';
+        let totalBruto = list.reduce((sum, r) => sum + r.amount, 0);
+        let html = `<div class="summary-card returns-section"><div class="group-title">${title}</div>`;
+        html += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}`;
+        if (isDividend) {
+          // No se muestra neto
         }
-        fullHtml += `</div>`;
-      }
+        html += `</strong></div>`;
 
-      // Botón detalle y selector de año (juntos)
-      fullHtml += `
-        <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
-          <button id="toggleDividendosDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
-            Ver detalle
-          </button>
-          <select id="filterYearDividendos" class="year-filter" style="padding: 6px; font-size: 0.95rem;">
-            <option value="">Todos</option>
-      `;
-      const allYearsDiv = [...new Set(dividends.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
-      for (const year of allYearsDiv) {
-          fullHtml += `<option value="${year}">${year}</option>`;
-      }
-      fullHtml += `
+        // Por año (siempre visible)
+        const byYear = {};
+        for (const r of list) {
+          const year = new Date(r.date).getFullYear();
+          if (!byYear[year]) byYear[year] = 0;
+          byYear[year] += r.amount;
+        }
+        if (Object.keys(byYear).length > 0) { // Mostrar siempre si hay años
+          html += `<div class="dividends-by-year">`;
+          const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
+          for (const year of sortedYears) {
+            const bruto = byYear[year];
+            html += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}`;
+            if (isDividend) {
+              // No se muestra neto
+            }
+            html += `</strong></div>`;
+          }
+          html += `</div>`;
+        }
+
+        // Botón detalle y selector de año (juntos)
+        html += `
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
+            <button id="toggle${title.replace(/\s+/g, '')}Detail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
+              Ver detalle
+            </button>
+            <select id="filterYear${title.replace(/\s+/g, '')}" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
+              <option value="">Todos</option>
+        `;
+        const allYears = [...new Set(list.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        for (const year of allYears) {
+            html += `<option value="${year}">${year}</option>`;
+        }
+        html += `
             </select>
           </div>
-          <div id="DividendosDetail" style="display:none; margin-top:12px;">
-            <div id="filteredDetailDividendos"></div>
+          <div id="${title.replace(/\s+/g, '')}Detail" style="display:none; margin-top:12px;">
+            <div id="filteredDetail${title.replace(/\s+/g, '')}"></div>
           </div>
         `;
-      fullHtml += `</div>`; // Cierre de Dividendos
-    }
+        return html;
+      };
 
-    // --- SECCIÓN DE INTERESES ---
-    const interests = returns.filter(r => r.returnType === 'interest');
-    if (interests.length > 0) {
-      let totalBruto = interests.reduce((sum, r) => sum + r.amount, 0);
-      fullHtml += `<div class="summary-card returns-section"><div class="group-title">Intereses</div>`;
-      fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
-
-      // Por año (siempre visible)
-      const byYear = {};
-      for (const r of interests) {
-        const year = new Date(r.date).getFullYear();
-        if (!byYear[year]) byYear[year] = 0;
-        byYear[year] += r.amount;
-      }
-      if (Object.keys(byYear).length > 0) { // Mostrar siempre si hay años
-        fullHtml += `<div class="dividends-by-year">`;
-        const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
-        for (const year of sortedYears) {
-          const bruto = byYear[year];
-          fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
-        }
-        fullHtml += `</div>`;
-      }
-
-      // Botón detalle y selector de año (juntos)
-      fullHtml += `
-        <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
-          <button id="toggleInteresesDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
-            Ver detalle
-          </button>
-          <select id="filterYearIntereses" class="year-filter" style="padding: 6px; font-size: 0.95rem;">
-            <option value="">Todos</option>
-      `;
-      const allYearsInt = [...new Set(interests.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
-      for (const year of allYearsInt) {
-          fullHtml += `<option value="${year}">${year}</option>`;
-      }
-      fullHtml += `
-            </select>
-          </div>
-          <div id="InteresesDetail" style="display:none; margin-top:12px;">
-            <div id="filteredDetailIntereses"></div>
-          </div>
-        `;
-      fullHtml += `</div>`; // Cierre de Intereses
+      fullHtml += processType(dividends, 'Dividendos', true);
+      fullHtml += processType(interests, 'Intereses', false);
     }
 
     // --- SECCIÓN DE CUENTAS ---
@@ -432,6 +445,7 @@ async function renderAccountsSummary() {
           if (!acc) continue;
           const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
           const amount = byAccount[accId];
+          // CORRECCIÓN: Detalle de cuentas sin negrita
           html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}</div>`;
         }
         detailDiv.innerHTML = html;
@@ -455,50 +469,18 @@ async function renderAccountsSummary() {
   }
 }
 
-// --- FUNCIÓN ACTUALIZADA ---
-async function showAccountList() {
-  const accounts = await db.accounts.toArray();
-  if (accounts.length === 0) {
-    openModal('Cuentas', '<p>No hay cuentas. Añade una desde el menú.</p>');
-    return;
-  }
-  let html = '<h3>Cuentas</h3>';
-  accounts.forEach(acc => {
-    const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
-    const borderColorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
-    const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
-    html += `
-      <div class="asset-item" style="${borderColorStyle}">
-        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-        ${accountNumberDisplay ? `Nº: ${accountNumberDisplay}<br>` : ''}
-        Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
-        Saldo: ${formatCurrency(acc.currentBalance)}<br>
-        ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
-        ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
-        <div class="modal-actions">
-          <button class="btn-edit" data-id="${acc.id}">Editar</button>
-          <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
-        </div>
-      </div>
-    `;
+// --- INICIO ---
+document.addEventListener('DOMContentLoaded', () => {
+  db.open().catch(err => {
+    console.error('IndexedDB error:', err);
+    const el = document.getElementById('summary-totals');
+    if (el) el.innerHTML = '<p style="color:red">Error de base de datos.</p>';
+  }).then(() => {
+    renderAccountsSummary();
   });
-  openModal('Cuentas', html);
-  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
-    if (e.target.classList.contains('btn-delete')) {
-      const id = parseInt(e.target.dataset.id);
-      showConfirm('¿Eliminar esta cuenta? (Los rendimientos asociados no se borrarán)', async () => {
-        await db.accounts.delete(id); // Solo se borra la cuenta
-        showAccountList(); // Actualiza la lista
-      });
-    }
-    if (e.target.classList.contains('btn-edit')) {
-      const id = parseInt(e.target.dataset.id);
-      const acc = await db.accounts.get(id);
-      if (!acc) return;
-      openEditAccountForm(acc);
-    }
-  };
-}
+  // Inicializar tema (ahora en Parte 3)
+  // initMenu(); (ahora en Parte 3)
+});
 // --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
@@ -595,7 +577,14 @@ async function showAddAccountForm() {
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    // No cambiamos el valor del input, solo lo mostramos tal cual
+    // Formatear visualmente (opcional, pero no cambiar el valor real)
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    // No cambiamos el valor del input, solo lo mostramos formateado
+    // El cálculo se hará con parseFloat(value.replace('.', '').replace(',', '.'))
     e.target.value = value;
   });
 
@@ -737,7 +726,13 @@ async function openEditAccountForm(acc) {
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    // No cambiamos el valor del input, solo lo mostramos tal cual
+    // Formatear visualmente (opcional, pero no cambiar el valor real)
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    // No cambiamos el valor del input, solo lo mostramos formateado
     e.target.value = value;
   });
 
@@ -821,7 +816,13 @@ async function showAddReturnForm() {
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    // No cambiamos el valor del input, solo lo mostramos tal cual
+    // Formatear visualmente (opcional, pero no cambiar el valor real)
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    // No cambiamos el valor del input, solo lo mostramos formateado
     e.target.value = value;
   });
 
@@ -930,7 +931,7 @@ async function showReturnsList() {
       `;
       openModal('Editar Rendimiento', form);
 
-      // Lógica para el input de importe (sin formateo visual)
+      // Lógica para el input de importe con formato en edición
       const editAmountInput = document.getElementById('editReturnAmount');
       editAmountInput.addEventListener('input', (e) => {
         // Permitir solo números, comas y puntos
@@ -940,7 +941,13 @@ async function showReturnsList() {
         if (parts.length > 2) {
           value = parts[0] + ',' + parts.slice(1).join('');
         }
-        // No cambiamos el valor del input, solo lo mostramos tal cual
+        // Formatear visualmente (opcional, pero no cambiar el valor real)
+        const [integer, decimal] = value.split(',');
+        if (integer) {
+          const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+          value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+        }
+        // No cambiamos el valor del input, solo lo mostramos formateado
         e.target.value = value;
       });
 
@@ -972,6 +979,7 @@ async function showReturnsList() {
     }
   };
 }
+// --- TEMA ---
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
 }
@@ -1106,8 +1114,9 @@ function showHelp() {
       <li>🏷️ Identificación de cuentas de valores</li>
       <li>🎨 Asignación de color a tarjetas</li>
       <li>🔄 Reordenar cuentas con arrastrar y soltar</li>
-      <li>💰 Registro de rendimientos: intereses y dividendos (en bruto)</li>
+      <li>💰 Registro de rendimientos: intereses y dividendos</li>
       <li>📊 Rendimientos con desglose anual visible</li>
+      <li>📊 Dividendos mostrados en bruto</li>
       <li>📊 Separación de saldos: Cuentas y Valores</li>
       <li>🔄 Sin movimientos: solo rendimientos con fecha</li>
       <li>📤 Exportar a JSON</li>
@@ -1119,7 +1128,7 @@ function showHelp() {
   openModal('Ayuda', content);
 }
 
-// --- INICIO ---
+// --- INICIO (actualizado para usar funciones de Parte 3) ---
 document.addEventListener('DOMContentLoaded', () => {
   db.open().catch(err => {
     console.error('IndexedDB error:', err);
@@ -1128,6 +1137,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }).then(() => {
     renderAccountsSummary();
   });
-  setTheme(getCurrentTheme());
-  initMenu();
+  setTheme(getCurrentTheme()); // Llamada a la función en Parte 3
+  initMenu(); // Llamada a la función en Parte 3
 });
