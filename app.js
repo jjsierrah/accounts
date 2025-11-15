@@ -3,808 +3,237 @@ const db = new Dexie('JJBankAccountsDB');
 db.version(2).stores({
   accounts: '++id, bank, description, holder, holder2, currentBalance, note, color, accountNumber, isValueAccount',
   returns: '++id, accountId, amount, date, returnType, note'
-}).upgrade(tx => {
-  // Migrar cuentas antiguas: añadir isValueAccount como false
-  return tx.accounts.toCollection().modify(acc => {
-    if (acc.isValueAccount === undefined) {
-      acc.isValueAccount = false;
-    }
-  });
-});
+}).upgrade(tx => tx.accounts.toCollection().modify(acc => {
+  if (acc.isValueAccount === undefined) acc.isValueAccount = false;
+}));
 
-// --- UTILIDADES ---
-function today() {
-  const d = new Date();
-  return d.toISOString().split('T')[0];
-}
+// --- UTILS ---
+const today = () => new Date().toISOString().split('T')[0];
+const isDateValidAndNotFuture = d => d && new Date(d) <= new Date().setHours(23,59,59,999);
+const formatDate = d => {
+  const [y,m,day] = d.split('-');
+  return `${day}-${m}-${y}`;
+};
+const formatCurrency = v => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(v);
+const formatNumber   = v => new Intl.NumberFormat('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
+const formatIBAN = raw => raw ? raw.toUpperCase().replace(/\s/g,'').replace(/(.{4})/g,'$1 ').trim() : '';
+const saveCustomOrder = arr => localStorage.setItem('accountOrder', JSON.stringify(arr));
+const loadCustomOrder = () => JSON.parse(localStorage.getItem('accountOrder')||'[]');
 
-function isDateValidAndNotFuture(dateString) {
-  if (!dateString) return false;
-  const inputDate = new Date(dateString);
-  const todayStart = new Date();
-  todayStart.setHours(23, 59, 59, 999); // Fin del día de hoy
-  return inputDate <= todayStart;
-}
-
-function formatDate(dateString) {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
-}
-
-function formatCurrency(value) {
-  // Cambio aquí: formato de moneda con punto para miles y coma para decimales
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    useGrouping: true
-  }).format(value).replace(/\./g, '#TEMP_DOT#').replace(',', '.').replace(/#TEMP_DOT#/g, ',');
-}
-
-function formatNumber(value) {
-  // Cambio aquí: formato numérico con punto para miles y coma para decimales
-  return new Intl.NumberFormat('es-ES', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    useGrouping: true
-  }).format(value).replace(/\./g, '#TEMP_DOT#').replace(',', '.').replace(/#TEMP_DOT#/g, ',');
-}
-
-// --- FORMATO IBAN ---
-function formatIBAN(input) {
-  if (!input) return '';
-  const cleaned = input.toUpperCase().replace(/\s/g, '');
-  if (cleaned.length < 4) return cleaned;
-  let formatted = cleaned.substring(0, 4);
-  for (let i = 4; i < cleaned.length; i += 4) {
-    formatted += ' ' + cleaned.substring(i, i + 4);
+// --- TOAST (reutilizable) ---
+let toastEl;
+function showToast(msg){
+  if(toastEl) { toastEl.textContent=msg; toastEl.style.opacity=1; }
+  else {
+    toastEl=document.createElement('div'); toastEl.id='toast-notification';
+    document.body.appendChild(toastEl);
   }
-  return formatted;
+  Object.assign(toastEl.style,{
+    position:'fixed',bottom:'20px',left:'50%',transform:'translateX(-50%)',
+    background:'var(--toast-bg)',color:'white',padding:'14px 22px',borderRadius:'10px',
+    fontWeight:'bold',fontSize:'1.05rem',boxShadow:'0 4px 12px rgba(0,0,0,.2)',
+    zIndex:'10000',maxWidth:'90%',textAlign:'center',pointerEvents:'none',whiteSpace:'nowrap'
+  });
+  clearTimeout(toastEl._t);
+  toastEl._t=setTimeout(()=>toastEl.style.opacity='0',3000);
 }
 
-// --- ORDEN CUSTOM ---
-function saveCustomOrder(symbolList) {
-  localStorage.setItem('accountOrder', JSON.stringify(symbolList));
-}
-
-function loadCustomOrder() {
-  return JSON.parse(localStorage.getItem('accountOrder') || '[]');
-}
-
-function showToast(message) {
-  const existing = document.getElementById('toast-notification');
-  if (existing) existing.remove();
-  const toast = document.createElement('div');
-  toast.id = 'toast-notification';
-  toast.textContent = message;
-  toast.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--toast-bg);
-    color: white;
-    padding: 14px 22px;
-    border-radius: 10px;
-    font-weight: bold;
-    font-size: 1.05rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    z-index: 10000;
-    max-width: 90%;
-    text-align: center;
-  `;
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transition = 'opacity 0.5s';
-    setTimeout(() => {
-      if (toast.parentNode) toast.parentNode.removeChild(toast);
-    }, 500);
-  }, 3000);
-}
-
-function showConfirm(message, onConfirm) {
-  const mainOverlay = document.getElementById('modalOverlay');
-  if (mainOverlay) mainOverlay.style.display = 'none';
-  const overlay = document.createElement('div');
-  overlay.id = 'confirmOverlay';
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal-content" style="max-width: 350px;">
-      <div class="modal-body" style="text-align: center; padding: 24px;">
-        <p>${message}</p>
-        <div class="modal-actions" style="margin-top: 20px; justify-content: center;">
-          <button id="confirmNo" class="btn-delete" style="width: auto; padding: 10px 16px;">No</button>
-          <button id="confirmYes" class="btn-primary" style="width: auto; padding: 10px 16px; margin-left: 8px;">Sí</button>
+// --- CONFIRM (no oculta modal principal) ---
+function showConfirm(msg,onOk){
+  const overlay=document.createElement('div'); overlay.className='modal-overlay';
+  overlay.innerHTML=`
+    <div class="modal-content" style="max-width:350px">
+      <div class="modal-body" style="text-align:center;padding:24px">
+        <p>${msg}</p>
+        <div class="modal-actions" style="margin-top:20px;justify-content:center">
+          <button id="cfNo" class="btn-delete">No</button>
+          <button id="cfYes" class="btn-primary">Sí</button>
         </div>
       </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  overlay.style.display = 'flex';
-  const btnYes = document.getElementById('confirmYes');
-  const btnNo = document.getElementById('confirmNo');
-  const cleanup = () => {
-    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-  };
-  btnYes.onclick = () => {
-    cleanup();
-    onConfirm();
-  };
-  btnNo.onclick = cleanup;
-  overlay.onclick = (e) => {
-    if (e.target === overlay) cleanup();
-  };
+    </div>`;
+  document.body.appendChild(overlay); overlay.style.display='flex';
+  overlay.querySelector('#cfYes').onclick=()=>{overlay.remove(); onOk();};
+  overlay.querySelector('#cfNo').onclick=()=>overlay.remove();
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};
 }
 
-function openModal(title, content) {
-  let overlay = document.getElementById('modalOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'modalOverlay';
-    overlay.className = 'modal-overlay';
+// --- MODAL GENÉRICO ---
+function openModal(title,content){
+  let overlay=document.getElementById('modalOverlay');
+  if(!overlay){
+    overlay=document.createElement('div'); overlay.id='modalOverlay'; overlay.className='modal-overlay';
     document.body.appendChild(overlay);
   }
-  overlay.innerHTML = `
+  overlay.innerHTML=`
     <div class="modal-content">
-      <div class="modal-header">
-        <h3>${title}</h3>
-        <button class="close-modal">&times;</button>
-      </div>
+      <div class="modal-header"><h3>${title}</h3><button class="close-modal" aria-label="Cerrar">&times;</button></div>
       <div class="modal-body">${content}</div>
-    </div>
-  `;
-  overlay.style.display = 'flex';
-  document.querySelector('.close-modal').onclick = () => overlay.style.display = 'none';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = 'none'; };
+    </div>`;
+  overlay.style.display='flex';
+  overlay.querySelector('.close-modal').onclick=()=>overlay.style.display='none';
+  overlay.onclick=e=>{if(e.target===overlay)overlay.style.display='none';};
 }
 
-// --- FUNCIÓN ACTUALIZADA ---
-async function showAccountList() {
-  const accounts = await db.accounts.toArray();
-  if (accounts.length === 0) {
-    openModal('Cuentas', '<p>No hay cuentas. Añade una desde el menú.</p>');
-    return;
-  }
-  let html = '<h3>Cuentas</h3>';
-  accounts.forEach(acc => {
-    const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
-    // CORRECCIÓN: Borde completo en modal si es cuenta de valores, sino lateral
-    const borderStyle = acc.isValueAccount && acc.color ? `border: 2px solid ${acc.color};` : (acc.color ? `border-left: 4px solid ${acc.color};` : '');
-    const isValueAccountClass = acc.isValueAccount ? ' value-account' : ''; // Clase para borde completo en modal
-    const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
-    html += `
-      <div class="asset-item${isValueAccountClass}" style="${borderStyle}">
-        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-        ${accountNumberDisplay ? `Nº: ${accountNumberDisplay}<br>` : ''}
-        Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
+// --- LISTAR CUENTAS (MODAL) ---
+async function showAccountList(){
+  const accounts=await db.accounts.toArray();
+  if(!accounts.length){openModal('Cuentas','<p>No hay cuentas. Añade una desde el menú.</p>');return;}
+  let html='<h3>Cuentas</h3>';
+  accounts.forEach(acc=>{
+    const border=acc.isValueAccount&&acc.color?`border:2px solid ${acc.color}`:acc.color?`border-left:4px solid ${acc.color}`:'';
+    const num=acc.accountNumber?acc.isValueAccount?acc.accountNumber.toUpperCase():formatIBAN(acc.accountNumber):'';
+    html+=`
+      <div class="asset-item ${acc.isValueAccount?'value-account':''}" style="${border}">
+        <strong style="${acc.color?`color:${acc.color}`:''}">${acc.bank}</strong> ${acc.description?`(${acc.description})`:''}<br>
+        ${num?`Nº: ${num}<button class="btn-copy" data-number="${acc.accountNumber}" aria-label="Copiar">📋</button><br>`:''}
+        Titular: ${acc.holder}${acc.holder2?` / ${acc.holder2}`:''}<br>
         Saldo: ${formatCurrency(acc.currentBalance)}<br>
-        ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
-        ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
+        ${acc.isValueAccount?'<small>Cuenta de Valores</small><br>':''}
+        ${acc.note?`<small>Nota: ${acc.note}</small>`:''}
         <div class="modal-actions">
-          <button class="btn-edit" data-id="${acc.id}">Editar</button>
-          <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
+          <button class="btn-edit" data-id="${acc.id}" aria-label="Editar">Editar</button>
+          <button class="btn-delete" data-id="${acc.id}" aria-label="Eliminar">Eliminar</button>
         </div>
-      </div>
-    `;
+      </div>`;
   });
-  openModal('Cuentas', html);
-  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
-    if (e.target.classList.contains('btn-delete')) {
-      const id = parseInt(e.target.dataset.id);
-      showConfirm('¿Eliminar esta cuenta? (Los rendimientos asociados no se borrarán)', async () => {
-        await db.accounts.delete(id); // Solo se borra la cuenta
-        showAccountList(); // Actualiza la lista
-      });
+  openModal('Cuentas',html);
+  const body=document.querySelector('#modalOverlay .modal-body');
+  body.onclick=async e=>{
+    if(e.target.classList.contains('btn-delete')){
+      const id=parseInt(e.target.dataset.id);
+      showConfirm('¿Eliminar esta cuenta?',async()=>{await db.accounts.delete(id);showAccountList();});
     }
-    if (e.target.classList.contains('btn-edit')) {
-      const id = parseInt(e.target.dataset.id);
-      const acc = await db.accounts.get(id);
-      if (!acc) return;
-      openEditAccountForm(acc);
+    if(e.target.classList.contains('btn-edit')){
+      const acc=await db.accounts.get(parseInt(e.target.dataset.id));
+      if(acc)openEditAccountForm(acc);
+    }
+    if(e.target.classList.contains('btn-copy')){
+      const n=e.target.dataset.number;
+      navigator.clipboard.writeText(n).then(()=>showToast('✅ Copiado'));
     }
   };
 }
+
 // --- RENDER RESUMEN ---
-async function renderAccountsSummary() {
-  const summaryTotals = document.getElementById('summary-totals');
-  const summaryContainer = document.getElementById('summary-by-bank');
-  if (!summaryTotals || !summaryContainer) return;
+async function renderAccountsSummary(){
+  const totals=document.getElementById('summary-totals');
+  const container=document.getElementById('summary-by-bank');
+  if(!totals||!container)return;
+  try{
+    const accounts=await db.accounts.toArray();
+    if(!accounts.length){totals.innerHTML='<p>No hay cuentas. Añade una desde el menú.</p>';container.innerHTML='';return;}
 
-  try {
-    const accounts = await db.accounts.toArray();
-    if (accounts.length === 0) {
-      summaryTotals.innerHTML = '<p>No hay cuentas. Añade una desde el menú.</p>';
-      summaryContainer.innerHTML = '';
-      return;
-    }
-
-    // Cargar orden personalizado
-    const customOrder = loadCustomOrder();
-    const orderedAccounts = [...accounts].sort((a, b) => {
-      const aIndex = customOrder.indexOf(a.id);
-      const bIndex = customOrder.indexOf(b.id);
-      if (aIndex === -1 && bIndex === -1) return 0;
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
+    const customOrder=loadCustomOrder();
+    const ordered=[...accounts].sort((a,b)=>{
+      const ai=customOrder.indexOf(a.id),bi=customOrder.indexOf(b.id);
+      if(ai===-1&&bi===-1)return 0;if(ai===-1)return 1;if(bi===-1)return -1;
+      return ai-bi;
     });
 
-    // Calcular totales
-    let totalBalanceAccounts = 0;
-    let totalBalanceValues = 0;
-    for (const acc of accounts) {
-      if (acc.isValueAccount) {
-        totalBalanceValues += acc.currentBalance || 0;
-      } else {
-        totalBalanceAccounts += acc.currentBalance || 0;
-      }
-    }
-
-    summaryTotals.innerHTML = `
+    let sumAcc=0,sumVal=0;
+    accounts.forEach(a=>a.isValueAccount?sumVal+=a.currentBalance||0:sumAcc+=a.currentBalance||0);
+    totals.innerHTML=`
       <div class="summary-card">
-        <div class="dividend-line"><strong>Saldo (Cuentas):</strong> <strong>${formatCurrency(totalBalanceAccounts)}</strong></div>
-        <div class="dividend-line"><strong>Saldo (Valores):</strong> <strong>${formatCurrency(totalBalanceValues)}</strong></div>
-        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
-        <div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBalanceAccounts + totalBalanceValues)}</strong></div>
-      </div>
-    `;
+        <div class="dividend-line"><strong>Saldo (Cuentas):</strong> <strong>${formatCurrency(sumAcc)}</strong></div>
+        <div class="dividend-line"><strong>Saldo (Valores):</strong> <strong>${formatCurrency(sumVal)}</strong></div>
+        <hr style="border:none;border-top:1px solid var(--border-color);margin:8px 0;">
+        <div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(sumAcc+sumVal)}</strong></div>
+      </div>`;
 
-    const returns = await db.returns.toArray();
-    let fullHtml = '';
+    const returns=await db.returns.toArray();
+    let html='';
 
-    if (returns.length > 0) {
-      const dividends = returns.filter(r => r.returnType === 'dividend');
-      const interests = returns.filter(r => r.returnType === 'interest');
+    const divs=returns.filter(r=>r.returnType==='dividend');
+    const ints=returns.filter(r=>r.returnType==='interest');
 
-      // --- SECCIÓN DE DIVIDENDOS ---
-      if (dividends.length > 0) {
-        let totalBruto = dividends.reduce((sum, r) => sum + r.amount, 0);
-        fullHtml += `<div class="summary-card returns-section"><div class="group-title">Dividendos</div>`;
-        fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
-
-        // Por año (siempre visible)
-        const byYear = {};
-        for (const r of dividends) {
-          const year = new Date(r.date).getFullYear();
-          if (!byYear[year]) byYear[year] = 0;
-          byYear[year] += r.amount;
-        }
-        if (Object.keys(byYear).length > 0) {
-          fullHtml += `<div class="dividends-by-year">`;
-          const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
-          for (const year of sortedYears) {
-            const bruto = byYear[year];
-            fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
-          }
-          fullHtml += `</div>`;
-        }
-
-        // Botón detalle y selector de año (juntos)
-        fullHtml += `
-          <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
-            <button id="toggleDividendosDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
-              Ver detalle
-            </button>
-            <select id="filterYearDividendos" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
-              <option value="">Todos</option>
-        `;
-        const allYearsDiv = [...new Set(dividends.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
-        for (const year of allYearsDiv) {
-            fullHtml += `<option value="${year}">${year}</option>`;
-        }
-        fullHtml += `
-            </select>
-          </div>
-          <div id="DividendosDetail" style="display:none; margin-top:12px;">
-            <div id="filteredDetailDividendos"></div>
-          </div>
-        `;
-        fullHtml += `</div>`; // Cierre de Dividendos
+    if(divs.length){
+      const byYear={};
+      divs.forEach(r=>{const y=new Date(r.date).getFullYear();byYear[y]=(byYear[y]||0)+r.amount;});
+      html+=`<div class="summary-card returns-section"><div class="group-title">Dividendos</div>
+        <div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(divs.reduce((s,r)=>s+r.amount,0))}</strong></div>`;
+      if(Object.keys(byYear).length){
+        html+=`<div class="dividends-by-year">`;
+        Object.keys(byYear).sort((a,b)=>b-a).forEach(y=>html+=`<div class="dividend-line"><strong>${y}:</strong> <strong>${formatCurrency(byYear[y])}</strong></div>`);
+        html+=`</div>`;
       }
+      html+=`<div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+        <button id="toggleDividendosDetail" class="btn-primary" style="padding:10px;font-size:.95rem;width:auto">Ver detalle</button>
+        <select id="filterYearDividendos" class="year-filter"><option value="">Todos</option>${[...new Set(divs.map(r=>new Date(r.date).getFullYear()))].sort((a,b)=>b-a).map(y=>`<option value="${y}">${y}</option>`).join('')}</select>
+      </div><div id="DividendosDetail" style="display:none;margin-top:12px"><div id="filteredDetailDividendos"></div></div></div>`;
+    }
 
-      // --- SECCIÓN DE INTERESES ---
-      if (interests.length > 0) {
-        let totalBruto = interests.reduce((sum, r) => sum + r.amount, 0);
-        fullHtml += `<div class="summary-card returns-section"><div class="group-title">Intereses</div>`;
-        fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
-
-        // Por año (siempre visible)
-        const byYear = {};
-        for (const r of interests) {
-          const year = new Date(r.date).getFullYear();
-          if (!byYear[year]) byYear[year] = 0;
-          byYear[year] += r.amount;
-        }
-        if (Object.keys(byYear).length > 0) {
-          fullHtml += `<div class="dividends-by-year">`;
-          const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
-          for (const year of sortedYears) {
-            const bruto = byYear[year];
-            fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
-          }
-          fullHtml += `</div>`;
-        }
-
-        // Botón detalle y selector de año (juntos)
-        fullHtml += `
-          <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
-            <button id="toggleInteresesDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
-              Ver detalle
-            </button>
-            <select id="filterYearIntereses" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
-              <option value="">Todos</option>
-        `;
-        const allYearsInt = [...new Set(interests.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
-        for (const year of allYearsInt) {
-            fullHtml += `<option value="${year}">${year}</option>`;
-        }
-        fullHtml += `
-            </select>
-          </div>
-          <div id="InteresesDetail" style="display:none; margin-top:12px;">
-            <div id="filteredDetailIntereses"></div>
-          </div>
-        `;
-        fullHtml += `</div>`; // Cierre de Intereses
+    if(ints.length){
+      const byYear={};
+      ints.forEach(r=>{const y=new Date(r.date).getFullYear();byYear[y]=(byYear[y]||0)+r.amount;});
+      html+=`<div class="summary-card returns-section"><div class="group-title">Intereses</div>
+        <div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(ints.reduce((s,r)=>s+r.amount,0))}</strong></div>`;
+      if(Object.keys(byYear).length){
+        html+=`<div class="dividends-by-year">`;
+        Object.keys(byYear).sort((a,b)=>b-a).forEach(y=>html+=`<div class="dividend-line"><strong>${y}:</strong> <strong>${formatCurrency(byYear[y])}</strong></div>`);
+        html+=`</div>`;
       }
+      html+=`<div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+        <button id="toggleInteresesDetail" class="btn-primary" style="padding:10px;font-size:.95rem;width:auto">Ver detalle</button>
+        <select id="filterYearIntereses" class="year-filter"><option value="">Todos</option>${[...new Set(ints.map(r=>new Date(r.date).getFullYear()))].sort((a,b)=>b-a).map(y=>`<option value="${y}">${y}</option>`).join('')}</select>
+      </div><div id="InteresesDetail" style="display:none;margin-top:12px"><div id="filteredDetailIntereses"></div></div></div>`;
     }
 
-    // --- SECCIÓN DE CUENTAS ---
-    fullHtml += `<div class="summary-card accounts-section"><div class="group-title">Cuentas</div>`;
-    fullHtml += `<div id="account-list" class="account-list">`; // Contenedor para drag & drop
-    for (const acc of orderedAccounts) {
-      const holderLine = acc.holder2 ? `${acc.holder}<span style="font-size: 1rem;"> / ${acc.holder2}</span>` : acc.holder; // Titular 2 mismo tamaño
-      const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en el texto principal
-      // CORRECCIÓN: Borde completo si es cuenta de valores, sino lateral
-      const borderStyle = acc.isValueAccount && acc.color ? `border: 2px solid ${acc.color};` : (acc.color ? `border-left: 4px solid ${acc.color};` : '');
-      const isValueAccountClass = acc.isValueAccount ? ' value-account' : ''; // Clase para borde completo
-      const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
-      fullHtml += `
-        <div class="asset-item${isValueAccountClass}" style="${borderStyle}" data-id="${acc.id}" draggable="true">
-          <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
-          Titular: ${holderLine}<br>
-          Saldo: ${formatCurrency(acc.currentBalance)}<br>
-          ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
-        </div>
-      `;
-    }
-    fullHtml += `</div>`; // Cierre de cuenta-list
-    fullHtml += `</div>`; // Cierre de accounts-section
-
-    summaryContainer.innerHTML = fullHtml;
-
-    // --- LÓGICA DE DRAG & DROP ---
-    const list = document.getElementById('account-list');
-    if (list) {
-      list.addEventListener('dragstart', e => {
-        if (e.target.classList.contains('asset-item')) {
-          e.target.classList.add('dragging');
-          e.dataTransfer.setData('text/plain', e.target.dataset.id);
-          e.dataTransfer.effectAllowed = 'move';
-        }
-      });
-      list.addEventListener('dragover', e => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-      });
-      list.addEventListener('dragenter', e => {
-        e.preventDefault();
-      });
-      list.addEventListener('drop', e => {
-        e.preventDefault();
-        const dragging = document.querySelector('.dragging');
-        if (dragging) {
-          const target = e.target.closest('.asset-item');
-          if (target && target !== dragging) {
-            const rect = target.getBoundingClientRect();
-            const next = rect.y + rect.height / 2 < e.clientY ? target.nextSibling : target;
-            list.insertBefore(dragging, next);
-            const ids = Array.from(list.children).map(el => parseInt(el.dataset.id));
-            saveCustomOrder(ids);
-          }
-        }
-      });
-      list.addEventListener('dragend', e => {
-        e.target.classList.remove('dragging');
-      });
-    }
-
-    // --- LÓGICA DE COPIAR AL PORTAPAPELES ---
-    document.querySelectorAll('.btn-copy').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const number = e.target.dataset.number;
-        if (number) {
-          navigator.clipboard.writeText(number).then(() => {
-            showToast('✅ Nº de cuenta copiado.');
-          }).catch(err => {
-            console.error('Error al copiar:', err);
-            showToast('❌ Error al copiar.');
-          });
-        }
-      });
+    html+=`<div class="summary-card accounts-section"><div class="group-title">Cuentas</div><div id="account-list" class="account-list">`;
+    ordered.forEach(acc=>{
+      const holderLine=acc.holder2?`${acc.holder}<span style="font-size:1rem"> / ${acc.holder2}</span>`:acc.holder;
+      const colorStyle=acc.color?`color:${acc.color}`:'';
+      const borderStyle=acc.isValueAccount&&acc.color?`border:2px solid ${acc.color}`:acc.color?`border-left:4px solid ${acc.color}`:'';
+      const num=acc.accountNumber?acc.isValueAccount?acc.accountNumber.toUpperCase():formatIBAN(acc.accountNumber):'';
+      html+=`<div class="asset-item ${acc.isValueAccount?'value-account':''}" style="${borderStyle}" data-id="${acc.id}" draggable="true">
+        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description?`(${acc.description})`:''}<br>
+        ${num?`Nº: ${num}<button class="btn-copy" data-number="${acc.accountNumber}" aria-label="Copiar">📋</button><br>`:''}
+        Titular: ${holderLine}<br>Saldo: ${formatCurrency(acc.currentBalance)}<br>
+        ${acc.isValueAccount?'<small>Cuenta de Valores</small><br>':''}
+        ${acc.note?`<small>Nota: ${acc.note}</small>`:''}
+      </div>`;
     });
+    html+=`</div></div>`;
+    container.innerHTML=html;
 
-    // --- TOGGLES DETALLE Y FILTRO ---
-    const toggleDivBtn = document.getElementById('toggleDividendosDetail');
-    if (toggleDivBtn) {
-      toggleDivBtn.onclick = function() {
-        const detail = document.getElementById('DividendosDetail');
-        const isVisible = detail.style.display === 'block';
-        detail.style.display = isVisible ? 'none' : 'block';
-        this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
-        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
-            const yearSelect = document.getElementById('filterYearDividendos');
-            if (yearSelect) updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
-        }
-      };
+    // drag & drop
+    const list=document.getElementById('account-list');
+    if(list){
+      list.addEventListener('dragstart',e=>{if(e.target.classList.contains('asset-item')){e.target.classList.add('dragging');e.dataTransfer.setData('text/plain',e.target.dataset.id);}});
+      list.addEventListener('dragover',e=>e.preventDefault());
+      list.addEventListener('drop',e=>{
+        e.preventDefault();const dragging=document.querySelector('.dragging'),target=e.target.closest('.asset-item');
+        if(target&&target!==dragging){const rect=target.getBoundingClientRect(),next=rect.y+rect.height/2<e.clientY?target.nextSibling:target;list.insertBefore(dragging,next);saveCustomOrder(Array.from(list.children).map(el=>parseInt(el.dataset.id)));}
+      });
+      list.addEventListener('dragend',e=>e.target.classList.remove('dragging'));
     }
 
-    const toggleIntBtn = document.getElementById('toggleInteresesDetail');
-    if (toggleIntBtn) {
-      toggleIntBtn.onclick = function() {
-        const detail = document.getElementById('InteresesDetail');
-        const isVisible = detail.style.display === 'block';
-        detail.style.display = isVisible ? 'none' : 'block';
-        this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
-        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
-            const yearSelect = document.getElementById('filterYearIntereses');
-            if (yearSelect) updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
-        }
-      };
-    }
+    // toggles y filtros
+    const toggle=(btnId,detailId,filterId,arr)=>{
+      const btn=document.getElementById(btnId),detail=document.getElementById(detailId),filter=document.getElementById(filterId);
+      if(!btn||!detail)return;
+      btn.onclick=()=>{const v=detail.style.display==='block';detail.style.display=v?'none':'block';btn.textContent=v?'Ver detalle':'Ocultar detalle';if(!v)updateDetail(filterId,detailId,arr);};
+      if(filter)filter.onchange=()=>updateDetail(filterId,detailId,arr);
+    };
+    const updateDetail=(selId,divId,arr)=>{
+      const y=document.getElementById(selId).value,div=document.getElementById(divId),map={};
+      ordered.forEach(a=>map[a.id]=a);
+      const filt=y?arr.filter(r=>new Date(r.date).getFullYear().toString()===y):arr;
+      const byAcc={};
+      filt.forEach(r=>byAcc[r.accountId]=(byAcc[r.accountId]||0)+r.amount);
+      div.innerHTML=Object.entries(byAcc).map(([id,amt])=>{
+        const a=map[id];if(!a)return'';return`<div class="dividend-line"><strong>${a.bank}${a.description?` (${a.description})`:''}:</strong> ${formatCurrency(amt)}</div>`;
+      }).join('');
+    };
+    toggle('toggleDividendosDetail','DividendosDetail','filterYearDividendos',divs);
+    toggle('toggleInteresesDetail','InteresesDetail','filterYearIntereses',ints);
 
-    // Lógica de filtro por año
-    function updateDetailByYear(title, selectId, detailId) {
-        const yearSelect = document.getElementById(selectId);
-        const detailDiv = document.getElementById(detailId);
-        if (!yearSelect || !detailDiv) return;
+    // copy buttons
+    container.querySelectorAll('.btn-copy').forEach(btn=>btn.onclick=e=>{navigator.clipboard.writeText(e.target.dataset.number).then(()=>showToast('✅ Copiado'));});
 
-        const selectedYear = yearSelect.value;
-        const allReturns = title === 'Dividendos' ? dividends : interests;
-        const accounts = orderedAccounts; // Usar la lista ordenada de cuentas
-        const accountMap = {};
-        accounts.forEach(a => accountMap[a.id] = a);
-
-        let html = '';
-        const filteredReturns = selectedYear ? allReturns.filter(r => new Date(r.date).getFullYear().toString() === selectedYear) : allReturns;
-        const byAccount = {};
-        for (const r of filteredReturns) {
-          if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
-          byAccount[r.accountId] += r.amount;
-        }
-        for (const accId in byAccount) {
-          const acc = accountMap[accId];
-          if (!acc) continue;
-          const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
-          const amount = byAccount[accId];
-          // CORRECCIÓN: Detalle de cuentas sin negrita
-          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}</div>`;
-        }
-        detailDiv.innerHTML = html;
-    }
-
-    // Eventos de cambio para los selects de filtro
-    const yearSelectDiv = document.getElementById('filterYearDividendos');
-    if (yearSelectDiv) {
-        yearSelectDiv.onchange = () => updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
-    }
-    const yearSelectInt = document.getElementById('filterYearIntereses');
-    if (yearSelectInt) {
-        yearSelectInt.onchange = () => updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
-    }
-
-
-  } catch (err) {
-    console.error('Error en renderAccountsSummary:', err);
-    summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
-    if (summaryContainer) summaryContainer.innerHTML = '';
-  }
+  }catch(err){console.error(err);totals.innerHTML='<p style="color:red">Error al cargar cuentas.</p>';}
 }
 
-// --- INICIO ---
-document.addEventListener('DOMContentLoaded', () => {
-  db.open().catch(err => {
-    console.error('IndexedDB error:', err);
-    const el = document.getElementById('summary-totals');
-    if (el) el.innerHTML = '<p style="color:red">Error de base de datos.</p>';
-  }).then(() => {
-    renderAccountsSummary();
-  });
-  // initTheme(); // Se llama en Parte 3
-  // initMenu();  // Se llama en Parte 3
-});
-// --- FORMULARIOS DE CUENTAS ---
-async function showAddAccountForm() {
-  // Obtener entidades existentes para datalist
-  const allAccounts = await db.accounts.toArray();
-  const banks = [...new Set(allAccounts.map(a => a.bank))];
-  const bankOptions = banks.map(b => `<option value="${b}">`).join('');
-
-  // Obtener titulares existentes para datalist (común)
-  const holders = [...new Set([
-    ...allAccounts.map(a => a.holder),
-    ...allAccounts.map(a => a.holder2).filter(h => h)
-  ])];
-  const holderOptions = holders.map(h => `<option value="${h}">`).join('');
-
-  const form = `
-    <div class="form-group">
-      <label>Entidad:</label>
-      <input type="text" id="bank" list="banks" placeholder="Ej: BBVA, Santander..." required />
-      <datalist id="banks">${bankOptions}</datalist>
-    </div>
-    <div class="form-group">
-      <label>Descripción:</label>
-      <input type="text" id="description" placeholder="Ej: Cuenta nómina, Ahorros..." />
-    </div>
-    <div class="form-group">
-      <label>Cuenta de Valores</label>
-      <label id="isValueAccountLabel" class="value-account-toggle" style="display: inline-block; padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; user-select: none; background-color: #f0f0f0; color: #333;">
-        <input type="checkbox" id="isValueAccount" style="display: none;">
-        <span>🏷️ No</span>
-      </label>
-    </div>
-    <div class="form-group">
-      <label>Nº de Cuenta (IBAN):</label>
-      <input type="text" id="accountNumber" placeholder="Ej: ES12 1234 5678 9012 3456 7890" required />
-    </div>
-    <div class="form-group">
-      <label>Titular principal:</label>
-      <input type="text" id="holder" list="holders" required />
-      <datalist id="holders">${holderOptions}</datalist>
-    </div>
-    <div class="form-group">
-      <label>Segundo titular:</label>
-      <input type="text" id="holder2" list="holders" />
-      <datalist id="holders">${holderOptions}</datalist>
-    </div>
-    <div class="form-group">
-      <label>Saldo actual (€):</label>
-      <input type="text" id="currentBalance" placeholder="0,00" required />
-    </div>
-    <div class="form-group">
-      <label>Color de tarjeta:</label>
-      <input type="color" id="color" value="#1a73e8" list="colorPalette">
-      <datalist id="colorPalette">
-        <option value="#091891"></option> <!-- BBVA -->
-        <option value="#fb6405"></option> <!-- ING -->
-        <option value="#04ac94"></option> <!-- N26 -->
-        <option value="#eb0404"></option> <!-- Santander -->
-        <option value="#21da60"></option> <!-- Trade Republic -->
-        <option value="#1496d2"></option> <!-- Revolut -->
-        <option value="#b3dded"></option> <!-- azul grisáceo -->
-        <option value="#f8f49c"></option> <!-- Amarillo -->
-      </datalist>
-    </div>
-    <div class="form-group">
-      <label>Nota:</label>
-      <input type="text" id="note" placeholder="Ej: Cuenta personal, Negocio..." />
-    </div>
-    <button id="btnSaveAccount" class="btn-primary">Añadir Cuenta</button>
-  `;
-  openModal('Añadir Cuenta', form);
-
-  // Lógica para el toggle de "Cuenta de Valores"
-  const toggleLabel = document.getElementById('isValueAccountLabel');
-  const checkbox = document.getElementById('isValueAccount');
-  toggleLabel.onclick = () => {
-    checkbox.checked = !checkbox.checked;
-    toggleLabel.querySelector('span').textContent = checkbox.checked ? '🏷️ Sí' : '🏷️ No';
-    // Actualizar placeholder del número de cuenta
-    const accountNumberInput = document.getElementById('accountNumber');
-    if (checkbox.checked) {
-      accountNumberInput.placeholder = "Ej: DE000A12B3C4";
-    } else {
-      accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
-    }
-  };
-
-  // Lógica para el input de saldo (sin formateo visual)
-  const balanceInput = document.getElementById('currentBalance');
-  balanceInput.addEventListener('input', (e) => {
-    // Permitir solo números, comas y puntos
-    let value = e.target.value.replace(/[^\d,.]/g, '');
-    // Si tiene más de una coma, dejar solo la primera
-    const parts = value.split(',');
-    if (parts.length > 2) {
-      value = parts[0] + ',' + parts.slice(1).join('');
-    }
-    // Formatear visualmente (opcional, pero no cambiar el valor real)
-    const [integer, decimal] = value.split(',');
-    if (integer) {
-      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-    }
-    // No cambiamos el valor del input, solo lo mostramos formateado
-    // El cálculo se hará con parseFloat(value.replace('.', '').replace(',', '.'))
-    e.target.value = value;
-  });
-
-  document.getElementById('btnSaveAccount').onclick = async () => {
-    const bank = document.getElementById('bank').value.trim();
-    const description = document.getElementById('description').value.trim();
-    const accountNumber = document.getElementById('accountNumber').value.trim();
-    const isValueAccount = checkbox.checked; // Usar el checkbox
-    const holder = document.getElementById('holder').value.trim();
-    const holder2 = document.getElementById('holder2').value.trim() || null;
-    let currentBalanceStr = balanceInput.value.trim();
-    if (currentBalanceStr === '') {
-      showToast('El saldo no puede estar vacío.');
-      return;
-    }
-    // Convertir de nuevo a número con coma como decimal
-    currentBalanceStr = currentBalanceStr.replace(/\./g, '').replace(',', '.');
-    const currentBalance = parseFloat(currentBalanceStr);
-    if (isNaN(currentBalance)) {
-      showToast('Saldo inválido.');
-      return;
-    }
-    const color = document.getElementById('color').value;
-    const note = document.getElementById('note').value.trim() || null;
-    if (!bank || !holder || !accountNumber) {
-      showToast('Completa todos los campos obligatorios.');
-      return;
-    }
-    await db.accounts.add({ bank, description, accountNumber, isValueAccount, holder, holder2, currentBalance, color, note });
-    document.getElementById('modalOverlay').style.display = 'none';
-    renderAccountsSummary();
-  };
-}
-
-// --- FUNCIÓN ACTUALIZADA ---
-async function openEditAccountForm(acc) {
-  // Obtener entidades existentes para datalist
-  const allAccounts = await db.accounts.toArray();
-  const banks = [...new Set(allAccounts.map(a => a.bank))];
-  const bankOptions = banks.map(b => `<option value="${b}">`).join('');
-
-  // Obtener titulares existentes para datalist (común)
-  const holders = [...new Set([
-    ...allAccounts.map(a => a.holder),
-    ...allAccounts.map(a => a.holder2).filter(h => h)
-  ])];
-  const holderOptions = holders.map(h => `<option value="${h}">`).join('');
-
-  // Formatear saldo para mostrarlo en el input
-  const formattedBalance = formatNumber(acc.currentBalance);
-
-  const form = `
-    <div class="form-group">
-      <label>Entidad:</label>
-      <input type="text" id="bank" list="banks" value="${acc.bank}" required />
-      <datalist id="banks">${bankOptions}</datalist>
-    </div>
-    <div class="form-group">
-      <label>Descripción:</label>
-      <input type="text" id="description" value="${acc.description || ''}" />
-    </div>
-    <div class="form-group">
-      <label>Cuenta de Valores</label>
-      <label id="isValueAccountLabel" class="value-account-toggle" style="display: inline-block; padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; user-select: none; background-color: #f0f0f0; color: #333;">
-        <input type="checkbox" id="isValueAccount" ${acc.isValueAccount ? 'checked' : ''} style="display: none;">
-        <span>🏷️ ${acc.isValueAccount ? 'Sí' : 'No'}</span>
-      </label>
-    </div>
-    <div class="form-group">
-      <label>Nº de Cuenta (IBAN):</label>
-      <input type="text" id="accountNumber" value="${acc.accountNumber || ''}" required />
-    </div>
-    <div class="form-group">
-      <label>Titular principal:</label>
-      <input type="text" id="holder" value="${acc.holder}" required />
-      <datalist id="holders">${holderOptions}</datalist>
-    </div>
-    <div class="form-group">
-      <label>Segundo titular:</label>
-      <input type="text" id="holder2" value="${acc.holder2 || ''}" />
-      <datalist id="holders">${holderOptions}</datalist>
-    </div>
-    <div class="form-group">
-      <label>Saldo actual (€):</label>
-      <input type="text" id="currentBalance" value="${formattedBalance}" required />
-    </div>
-    <div class="form-group">
-      <label>Color de tarjeta:</label>
-      <input type="color" id="color" value="${acc.color || '#1a73e8'}" list="colorPalette">
-      <datalist id="colorPalette">
-        <option value="#091891"></option> <!-- BBVA -->
-        <option value="#fb6405"></option> <!-- ING -->
-        <option value="#04ac94"></option> <!-- N26 -->
-        <option value="#eb0404"></option> <!-- Santander -->
-        <option value="#21da60"></option> <!-- Trade Republic -->
-        <option value="#1496d2"></option> <!-- Revolut -->
-        <option value="#b3dded"></option> <!-- azul grisáceo -->
-        <option value="#f8f49c"></option> <!-- Amarillo -->
-      </datalist>
-    </div>
-    <div class="form-group">
-      <label>Nota:</label>
-      <input type="text" id="note" value="${acc.note || ''}" />
-    </div>
-    <button id="btnUpdateAccount" class="btn-primary">Guardar Cambios</button>
-  `;
-  openModal('Editar Cuenta', form);
-
-  // Aplicar color al borde de la tarjeta del modal
-  const modalContent = document.querySelector('#modalOverlay .modal-content');
-  if (modalContent && acc.color) {
-    modalContent.style.borderLeft = `4px solid ${acc.color}`;
-  } else if (modalContent) {
-    modalContent.style.borderLeft = '4px solid #1a73e8'; // Color por defecto
-  }
-
-  // Lógica para el toggle de "Cuenta de Valores"
-  const toggleLabel = document.getElementById('isValueAccountLabel');
-  const checkbox = document.getElementById('isValueAccount');
-  toggleLabel.onclick = () => {
-    checkbox.checked = !checkbox.checked;
-    toggleLabel.querySelector('span').textContent = checkbox.checked ? '🏷️ Sí' : '🏷️ No';
-    // Actualizar placeholder del número de cuenta
-    const accountNumberInput = document.getElementById('accountNumber');
-    if (checkbox.checked) {
-      accountNumberInput.placeholder = "Ej: DE000A12B3C4";
-    } else {
-      accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
-    }
-  };
-
-  // Lógica para el input de saldo (sin formateo visual)
-  const balanceInput = document.getElementById('currentBalance');
-  balanceInput.addEventListener('input', (e) => {
-    // Permitir solo números, comas y puntos
-    let value = e.target.value.replace(/[^\d,.]/g, '');
-    // Si tiene más de una coma, dejar solo la primera
-    const parts = value.split(',');
-    if (parts.length > 2) {
-      value = parts[0] + ',' + parts.slice(1).join('');
-    }
-    // Formatear visualmente (opcional, pero no cambiar el valor real)
-    const [integer, decimal] = value.split(',');
-    if (integer) {
-      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-    }
-    // No cambiamos el valor del input, solo lo mostramos formateado
-    e.target.value = value;
-  });
-
-  document.getElementById('btnUpdateAccount').onclick = async () => {
-    const bank = document.getElementById('bank').value.trim();
-    const description = document.getElementById('description').value.trim();
-    const accountNumber = document.getElementById('accountNumber').value.trim();
-    const isValueAccount = checkbox.checked; // Usar el checkbox
-    const holder = document.getElementById('holder').value.trim();
-    const holder2 = document.getElementById('holder2').value.trim() || null;
-    let currentBalanceStr = balanceInput.value.trim();
-    if (currentBalanceStr === '') {
-      showToast('El saldo no puede estar vacío.');
-      return;
-    }
-    // Convertir de nuevo a número con coma como decimal
-    currentBalanceStr = currentBalanceStr.replace(/\./g, '').replace(',', '.');
-    const currentBalance = parseFloat(currentBalanceStr);
-    if (isNaN(currentBalance)) {
-      showToast('Saldo inválido.');
-      return;
-    }
-    const color = document.getElementById('color').value;
-    const note = document.getElementById('note').value.trim() || null;
-    if (!bank || !holder || !accountNumber) {
-      showToast('Completa todos los campos obligatorios.');
-      return;
-    }
-    await db.accounts.update(acc.id, { bank, description, accountNumber, isValueAccount, holder, holder2, currentBalance, color, note });
-    document.getElementById('modalOverlay').style.display = 'none';
-    renderAccountsSummary();
-  };
-}
+document.addEventListener('DOMContentLoaded',()=>db.open().catch(()=>showToast('Error DB')).then(()=>renderAccountsSummary));
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
