@@ -36,17 +36,18 @@ function formatDate(dateString) {
 }
 
 function formatCurrency(value) {
+  // Cambio aquí: formato de moneda con punto para miles y coma para decimales
   return new Intl.NumberFormat('es-ES', {
     style: 'currency',
     currency: 'EUR',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     useGrouping: true
-  }).format(value);
+  }).format(value).replace(/\./g, '#TEMP_DOT#').replace(',', '.').replace(/#TEMP_DOT#/g, ',');
 }
 
 function formatNumber(value) {
-  // Formato numérico: 1.234,56
+  // Cambio aquí: formato numérico con punto para miles y coma para decimales
   return new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -435,7 +436,7 @@ async function showAccountList() {
   accounts.forEach(acc => {
     const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
     const borderColorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
-    const isValueAccountClass = acc.isValueAccount ? ' value-account' : '';
+    const isValueAccountClass = acc.isValueAccount ? ' value-account' : ''; // Clase para borde completo en modal
     const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
     html += `
       <div class="asset-item${isValueAccountClass}" style="${borderColorStyle}">
@@ -469,6 +470,19 @@ async function showAccountList() {
     }
   };
 }
+
+// --- INICIO ---
+document.addEventListener('DOMContentLoaded', () => {
+  db.open().catch(err => {
+    console.error('IndexedDB error:', err);
+    const el = document.getElementById('summary-totals');
+    if (el) el.innerHTML = '<p style="color:red">Error de base de datos.</p>';
+  }).then(() => {
+    renderAccountsSummary();
+  });
+  // initTheme(); // Se llama en Parte 3
+  // initMenu();  // Se llama en Parte 3
+});
 // --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
@@ -753,7 +767,7 @@ async function openEditAccountForm(acc) {
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
-                                }
+}
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
@@ -966,7 +980,7 @@ async function showReturnsList() {
       };
     }
   };
-}
+  }
 // --- TEMA ---
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
