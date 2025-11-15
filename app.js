@@ -164,7 +164,7 @@ function openModal(title, content) {
   overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = 'none'; };
 }
 
-// --- RENDER RESUMEN ---
+// --- RENDER RESUMEN (Parte Inicial) ---
 async function renderAccountsSummary() {
   const summaryTotals = document.getElementById('summary-totals');
   const summaryContainer = document.getElementById('summary-by-bank');
@@ -216,65 +216,100 @@ async function renderAccountsSummary() {
       const dividends = returns.filter(r => r.returnType === 'dividend');
       const interests = returns.filter(r => r.returnType === 'interest');
 
-      const processType = (list, title, isDividend = false) => {
-        if (list.length === 0) return '';
-        let totalBruto = list.reduce((sum, r) => sum + r.amount, 0);
-        let html = `<div class="summary-card returns-section"><div class="group-title">${title}</div>`;
-        html += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}`;
-        if (isDividend) {
-          // No se muestra neto
-        }
-        html += `</strong></div>`;
+      // --- SECCIÓN DE DIVIDENDOS ---
+      if (dividends.length > 0) {
+        let totalBrutoDiv = dividends.reduce((sum, r) => sum + r.amount, 0);
+        fullHtml += `<div class="summary-card returns-section"><div class="group-title">Dividendos</div>`;
+        fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBrutoDiv)}</strong></div>`;
 
         // Por año (siempre visible)
-        const byYear = {};
-        for (const r of list) {
+        const byYearDiv = {};
+        for (const r of dividends) {
           const year = new Date(r.date).getFullYear();
-          if (!byYear[year]) byYear[year] = 0;
-          byYear[year] += r.amount;
+          if (!byYearDiv[year]) byYearDiv[year] = 0;
+          byYearDiv[year] += r.amount;
         }
-        if (Object.keys(byYear).length > 0) { // Mostrar siempre si hay años
-          html += `<div class="dividends-by-year">`;
-          const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
+        if (Object.keys(byYearDiv).length > 0) {
+          fullHtml += `<div class="dividends-by-year">`;
+          const sortedYears = Object.keys(byYearDiv).sort((a, b) => b - a);
           for (const year of sortedYears) {
-            const bruto = byYear[year];
-            html += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}`;
-            if (isDividend) {
-              // No se muestra neto
-            }
-            html += `</strong></div>`;
+            const bruto = byYearDiv[year];
+            fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
           }
-          html += `</div>`;
+          fullHtml += `</div>`;
         }
 
         // Botón detalle y selector de año (juntos)
-        html += `
+        fullHtml += `
           <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
-            <button id="toggle${title.replace(/\s+/g, '')}Detail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
+            <button id="toggleDividendosDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
               Ver detalle
             </button>
-            <select id="filterYear${title.replace(/\s+/g, '')}" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
+            <select id="filterYearDividendos" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
               <option value="">Todos</option>
         `;
-        const allYears = [...new Set(list.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
-        for (const year of allYears) {
-            html += `<option value="${year}">${year}</option>`;
+        const allYearsDiv = [...new Set(dividends.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        for (const year of allYearsDiv) {
+            fullHtml += `<option value="${year}">${year}</option>`;
         }
-        html += `
+        fullHtml += `
             </select>
           </div>
-          <div id="${title.replace(/\s+/g, '')}Detail" style="display:none; margin-top:12px;">
-            <div id="filteredDetail${title.replace(/\s+/g, '')}"></div>
+          <div id="DividendosDetail" style="display:none; margin-top:12px;">
+            <div id="filteredDetailDividendos"></div>
           </div>
         `;
-        return html;
-      };
+        fullHtml += `</div>`; // Cierre de summary-card para Dividendos
+      }
 
-      fullHtml += processType(dividends, 'Dividendos', true);
-      fullHtml += processType(interests, 'Intereses', false);
+      // --- SECCIÓN DE INTERESES ---
+      if (interests.length > 0) {
+        let totalBrutoInt = interests.reduce((sum, r) => sum + r.amount, 0);
+        fullHtml += `<div class="summary-card returns-section"><div class="group-title">Intereses</div>`;
+        fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBrutoInt)}</strong></div>`;
+
+        // Por año (siempre visible)
+        const byYearInt = {};
+        for (const r of interests) {
+          const year = new Date(r.date).getFullYear();
+          if (!byYearInt[year]) byYearInt[year] = 0;
+          byYearInt[year] += r.amount;
+        }
+        if (Object.keys(byYearInt).length > 0) {
+          fullHtml += `<div class="dividends-by-year">`;
+          const sortedYears = Object.keys(byYearInt).sort((a, b) => b - a);
+          for (const year of sortedYears) {
+            const bruto = byYearInt[year];
+            fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
+          }
+          fullHtml += `</div>`;
+        }
+
+        // Botón detalle y selector de año (juntos)
+        fullHtml += `
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
+            <button id="toggleInteresesDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
+              Ver detalle
+            </button>
+            <select id="filterYearIntereses" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
+              <option value="">Todos</option>
+        `;
+        const allYearsInt = [...new Set(interests.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        for (const year of allYearsInt) {
+            fullHtml += `<option value="${year}">${year}</option>`;
+        }
+        fullHtml += `
+            </select>
+          </div>
+          <div id="InteresesDetail" style="display:none; margin-top:12px;">
+            <div id="filteredDetailIntereses"></div>
+          </div>
+        `;
+        fullHtml += `</div>`; // Cierre de summary-card para Intereses
+      }
     }
 
-    // --- SECCIÓN DE CUENTAS ---
+    // --- SECCIÓN DE CUENTAS (HTML base) ---
     fullHtml += `<div class="summary-card accounts-section"><div class="group-title">Cuentas</div>`;
     fullHtml += `<div id="account-list" class="account-list">`; // Contenedor para drag & drop
     for (const acc of orderedAccounts) {
@@ -349,74 +384,8 @@ async function renderAccountsSummary() {
       });
     });
 
-    // --- TOGGLES DETALLE Y FILTRO ---
-    const toggleDivBtn = document.getElementById('toggleDividendosDetail');
-    if (toggleDivBtn) {
-      toggleDivBtn.onclick = function() {
-        const detail = document.getElementById('DividendosDetail');
-        const isVisible = detail.style.display === 'block';
-        detail.style.display = isVisible ? 'none' : 'block';
-        this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
-        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
-            const yearSelect = document.getElementById('filterYearDividendos');
-            if (yearSelect) updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
-        }
-      };
-    }
-
-    const toggleIntBtn = document.getElementById('toggleInteresesDetail');
-    if (toggleIntBtn) {
-      toggleIntBtn.onclick = function() {
-        const detail = document.getElementById('InteresesDetail');
-        const isVisible = detail.style.display === 'block';
-        detail.style.display = isVisible ? 'none' : 'block';
-        this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
-        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
-            const yearSelect = document.getElementById('filterYearIntereses');
-            if (yearSelect) updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
-        }
-      };
-    }
-
-    // Lógica de filtro por año
-    function updateDetailByYear(title, selectId, detailId) {
-        const yearSelect = document.getElementById(selectId);
-        const detailDiv = document.getElementById(detailId);
-        if (!yearSelect || !detailDiv) return;
-
-        const selectedYear = yearSelect.value;
-        const allReturns = title === 'Dividendos' ? dividends : interests;
-        const accounts = orderedAccounts; // Usar la lista ordenada de cuentas
-        const accountMap = {};
-        accounts.forEach(a => accountMap[a.id] = a);
-
-        let html = '';
-        const filteredReturns = selectedYear ? allReturns.filter(r => new Date(r.date).getFullYear().toString() === selectedYear) : allReturns;
-        const byAccount = {};
-        for (const r of filteredReturns) {
-          if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
-          byAccount[r.accountId] += r.amount;
-        }
-        for (const accId in byAccount) {
-          const acc = accountMap[accId];
-          if (!acc) continue;
-          const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
-          const amount = byAccount[accId];
-          // CORRECCIÓN: Detalle de cuentas sin negrita
-          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}</div>`;
-        }
-        detailDiv.innerHTML = html;
-    }
-
-    // Eventos de cambio para los selects de filtro
-    const yearSelectDiv = document.getElementById('filterYearDividendos');
-    if (yearSelectDiv) {
-        yearSelectDiv.onchange = () => updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
-    }
-    const yearSelectInt = document.getElementById('filterYearIntereses');
-    if (yearSelectInt) {
-        yearSelectInt.onchange = () => updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
-    }
+    // --- ASIGNACIÓN DE EVENTOS PARA BOTONES Y FILTROS (después de renderizar HTML) ---
+    setupDetailAndFilterLogic(dividends, interests, orderedAccounts);
 
   } catch (err) {
     console.error('Error en renderAccountsSummary:', err);
@@ -483,6 +452,78 @@ document.addEventListener('DOMContentLoaded', () => {
   // initTheme(); // Se llama en Parte 3
   // initMenu();  // Se llama en Parte 3
 });
+// --- FUNCIÓN EXTERNA PARA ASIGNAR EVENTOS (Parte 1B) ---
+function setupDetailAndFilterLogic(dividends, interests, orderedAccounts) {
+    // Lógica para Dividendos
+    const toggleDivBtn = document.getElementById('toggleDividendosDetail');
+    if (toggleDivBtn) {
+      toggleDivBtn.onclick = function() {
+        const detail = document.getElementById('DividendosDetail');
+        const isVisible = detail.style.display === 'block';
+        detail.style.display = isVisible ? 'none' : 'block';
+        this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
+        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
+            const yearSelect = document.getElementById('filterYearDividendos');
+            if (yearSelect) updateDetailByYear('Dividendos', dividends, orderedAccounts); // Pasar datos específicos
+        }
+      };
+    }
+
+    // Lógica para Intereses
+    const toggleIntBtn = document.getElementById('toggleInteresesDetail');
+    if (toggleIntBtn) {
+      toggleIntBtn.onclick = function() {
+        const detail = document.getElementById('InteresesDetail');
+        const isVisible = detail.style.display === 'block';
+        detail.style.display = isVisible ? 'none' : 'block';
+        this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
+        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
+            const yearSelect = document.getElementById('filterYearIntereses');
+            if (yearSelect) updateDetailByYear('Intereses', interests, orderedAccounts); // Pasar datos específicos
+        }
+      };
+    }
+
+    // Lógica de filtro por año (ahora genérica y recibe datos específicos)
+    function updateDetailByYear(section, returnsList, accountsList) {
+        const yearSelectId = `filterYear${section}`;
+        const detailId = `filteredDetail${section}`;
+        const yearSelect = document.getElementById(yearSelectId);
+        const detailDiv = document.getElementById(detailId);
+        if (!yearSelect || !detailDiv) return;
+
+        const selectedYear = yearSelect.value;
+        const accountMap = {};
+        accountsList.forEach(a => accountMap[a.id] = a);
+
+        let html = '';
+        const filteredReturns = selectedYear ? returnsList.filter(r => new Date(r.date).getFullYear().toString() === selectedYear) : returnsList;
+        const byAccount = {};
+        for (const r of filteredReturns) {
+          if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
+          byAccount[r.accountId] += r.amount;
+        }
+        for (const accId in byAccount) {
+          const acc = accountMap[accId];
+          if (!acc) continue;
+          const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
+          const amount = byAccount[accId];
+          // CORRECCIÓN: Detalle de cuentas sin negrita
+          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}</div>`;
+        }
+        detailDiv.innerHTML = html;
+    }
+
+    // Eventos de cambio para los selects de filtro (ahora también genéricos)
+    const yearSelectDiv = document.getElementById('filterYearDividendos');
+    if (yearSelectDiv) {
+        yearSelectDiv.onchange = () => updateDetailByYear('Dividendos', dividends, orderedAccounts);
+    }
+    const yearSelectInt = document.getElementById('filterYearIntereses');
+    if (yearSelectInt) {
+        yearSelectInt.onchange = () => updateDetailByYear('Intereses', interests, orderedAccounts);
+    }
+}
 // --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
@@ -980,7 +1021,7 @@ async function showReturnsList() {
       };
     }
   };
-  }
+}
 // --- TEMA ---
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
