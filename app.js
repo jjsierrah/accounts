@@ -4,6 +4,7 @@ db.version(2).stores({
   accounts: '++id, bank, description, holder, holder2, currentBalance, note, color, accountNumber, isValueAccount',
   returns: '++id, accountId, amount, date, returnType, note'
 }).upgrade(tx => {
+  // Migrar cuentas antiguas: añadir isValueAccount como false
   return tx.accounts.toCollection().modify(acc => {
     if (acc.isValueAccount === undefined) {
       acc.isValueAccount = false;
@@ -45,11 +46,12 @@ function formatCurrency(value) {
 }
 
 function formatNumber(value) {
+  // Formato numérico: 1.234,56
   return new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     useGrouping: true
-  }).format(value);
+  }).format(value).replace(/\./g, '#TEMP_DOT#').replace(',', '.').replace(/#TEMP_DOT#/g, ',');
 }
 
 // --- FORMATO IBAN ---
@@ -139,7 +141,6 @@ function showConfirm(message, onConfirm) {
   };
 }
 
-// --- FUNCIÓN MODAL GENERAL ---
 function openModal(title, content) {
   let overlay = document.getElementById('modalOverlay');
   if (!overlay) {
@@ -162,52 +163,7 @@ function openModal(title, content) {
   overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = 'none'; };
 }
 
-// --- FUNCIÓN ACTUALIZADA ---
-async function showAccountList() {
-  const accounts = await db.accounts.toArray();
-  if (accounts.length === 0) {
-    openModal('Cuentas', '<p>No hay cuentas. Añade una desde el menú.</p>');
-    return;
-  }
-  let html = '<h3>Cuentas</h3>';
-  accounts.forEach(acc => {
-    const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
-    const borderColorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
-    const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
-    html += `
-      <div class="asset-item" style="${borderColorStyle}">
-        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-        ${accountNumberDisplay ? `Nº: ${accountNumberDisplay}<br>` : ''}
-        Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
-        Saldo: ${formatCurrency(acc.currentBalance)}<br>
-        ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
-        ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
-        <div class="modal-actions">
-          <button class="btn-edit" data-id="${acc.id}">Editar</button>
-          <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
-        </div>
-      </div>
-    `;
-  });
-  openModal('Cuentas', html);
-  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
-    if (e.target.classList.contains('btn-delete')) {
-      const id = parseInt(e.target.dataset.id);
-      showConfirm('¿Eliminar esta cuenta? (Los rendimientos asociados no se borrarán)', async () => {
-        await db.accounts.delete(id); // Solo se borra la cuenta
-        showAccountList(); // Actualiza la lista
-      });
-    }
-    if (e.target.classList.contains('btn-edit')) {
-      const id = parseInt(e.target.dataset.id);
-      const acc = await db.accounts.get(id);
-      if (!acc) return;
-      openEditAccountForm(acc);
-    }
-  };
-}
-
-// --- RENDER RESUMEN PRINCIPAL ---
+// --- RENDER RESUMEN ---
 async function renderAccountsSummary() {
   const summaryTotals = document.getElementById('summary-totals');
   const summaryContainer = document.getElementById('summary-by-bank');
@@ -461,7 +417,6 @@ async function renderAccountsSummary() {
         yearSelectInt.onchange = () => updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
     }
 
-
   } catch (err) {
     console.error('Error en renderAccountsSummary:', err);
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
@@ -469,18 +424,51 @@ async function renderAccountsSummary() {
   }
 }
 
-// --- INICIO ---
-document.addEventListener('DOMContentLoaded', () => {
-  db.open().catch(err => {
-    console.error('IndexedDB error:', err);
-    const el = document.getElementById('summary-totals');
-    if (el) el.innerHTML = '<p style="color:red">Error de base de datos.</p>';
-  }).then(() => {
-    renderAccountsSummary();
+// --- FUNCIÓN ACTUALIZADA ---
+async function showAccountList() {
+  const accounts = await db.accounts.toArray();
+  if (accounts.length === 0) {
+    openModal('Cuentas', '<p>No hay cuentas. Añade una desde el menú.</p>');
+    return;
+  }
+  let html = '<h3>Cuentas</h3>';
+  accounts.forEach(acc => {
+    const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
+    const borderColorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+    const isValueAccountClass = acc.isValueAccount ? ' value-account' : '';
+    const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
+    html += `
+      <div class="asset-item${isValueAccountClass}" style="${borderColorStyle}">
+        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
+        ${accountNumberDisplay ? `Nº: ${accountNumberDisplay}<br>` : ''}
+        Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
+        Saldo: ${formatCurrency(acc.currentBalance)}<br>
+        ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
+        ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
+        <div class="modal-actions">
+          <button class="btn-edit" data-id="${acc.id}">Editar</button>
+          <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
+        </div>
+      </div>
+    `;
   });
-  // Inicializar tema (ahora en Parte 3)
-  // initMenu(); (ahora en Parte 3)
-});
+  openModal('Cuentas', html);
+  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
+    if (e.target.classList.contains('btn-delete')) {
+      const id = parseInt(e.target.dataset.id);
+      showConfirm('¿Eliminar esta cuenta? (Los rendimientos asociados no se borrarán)', async () => {
+        await db.accounts.delete(id); // Solo se borra la cuenta
+        showAccountList(); // Actualiza la lista
+      });
+    }
+    if (e.target.classList.contains('btn-edit')) {
+      const id = parseInt(e.target.dataset.id);
+      const acc = await db.accounts.get(id);
+      if (!acc) return;
+      openEditAccountForm(acc);
+    }
+  };
+}
 // --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
@@ -765,7 +753,7 @@ async function openEditAccountForm(acc) {
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
-}
+                                }
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
