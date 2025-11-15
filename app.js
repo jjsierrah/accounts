@@ -164,115 +164,146 @@ function openModal(title, content) {
   overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = 'none'; };
 }
 
-// --- RENDER RESUMEN ---
-async function renderAccountsSummary() {
-  const summaryTotals = document.getElementById('summary-totals');
-  const summaryContainer = document.getElementById('summary-by-bank');
-  if (!summaryTotals || !summaryContainer) return;
-
-  try {
-    const accounts = await db.accounts.toArray();
-    if (accounts.length === 0) {
-      summaryTotals.innerHTML = '<p>No hay cuentas. Añade una desde el menú.</p>';
-      summaryContainer.innerHTML = '';
-      return;
-    }
-
-    // Cargar orden personalizado
-    const customOrder = loadCustomOrder();
-    const orderedAccounts = [...accounts].sort((a, b) => {
-      const aIndex = customOrder.indexOf(a.id);
-      const bIndex = customOrder.indexOf(b.id);
-      if (aIndex === -1 && bIndex === -1) return 0;
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
-    });
-
-    // Calcular totales
-    let totalBalanceAccounts = 0;
-    let totalBalanceValues = 0;
-    for (const acc of accounts) {
-      if (acc.isValueAccount) {
-        totalBalanceValues += acc.currentBalance || 0;
-      } else {
-        totalBalanceAccounts += acc.currentBalance || 0;
-      }
-    }
-
-    summaryTotals.innerHTML = `
-      <div class="summary-card">
-        <div class="dividend-line"><strong>Saldo (Cuentas):</strong> <strong>${formatCurrency(totalBalanceAccounts)}</strong></div>
-        <div class="dividend-line"><strong>Saldo (Valores):</strong> <strong>${formatCurrency(totalBalanceValues)}</strong></div>
-        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
-        <div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBalanceAccounts + totalBalanceValues)}</strong></div>
+// --- FUNCIÓN ACTUALIZADA ---
+async function showAccountList() {
+  const accounts = await db.accounts.toArray();
+  if (accounts.length === 0) {
+    openModal('Cuentas', '<p>No hay cuentas. Añade una desde el menú.</p>');
+    return;
+  }
+  let html = '<h3>Cuentas</h3>';
+  accounts.forEach(acc => {
+    const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en modal también
+    const borderColorStyle = acc.color ? `border-left: 4px solid ${acc.color};` : '';
+    const isValueAccountClass = acc.isValueAccount ? ' value-account' : ''; // Clase para borde completo en modal
+    const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
+    html += `
+      <div class="asset-item${isValueAccountClass}" style="${borderColorStyle}">
+        <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
+        ${accountNumberDisplay ? `Nº: ${accountNumberDisplay}<br>` : ''}
+        Titular: ${acc.holder}${acc.holder2 ? ` / ${acc.holder2}` : ''}<br>
+        Saldo: ${formatCurrency(acc.currentBalance)}<br>
+        ${acc.isValueAccount ? '<small>Cuenta de Valores</small><br>' : ''}
+        ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
+        <div class="modal-actions">
+          <button class="btn-edit" data-id="${acc.id}">Editar</button>
+          <button class="btn-delete" data-id="${acc.id}">Eliminar</button>
+        </div>
       </div>
     `;
+  });
+  openModal('Cuentas', html);
+  document.querySelector('#modalOverlay .modal-body').onclick = async (e) => {
+    if (e.target.classList.contains('btn-delete')) {
+      const id = parseInt(e.target.dataset.id);
+      showConfirm('¿Eliminar esta cuenta? (Los rendimientos asociados no se borrarán)', async () => {
+        await db.accounts.delete(id); // Solo se borra la cuenta
+        showAccountList(); // Actualiza la lista
+      });
+    }
+    if (e.target.classList.contains('btn-edit')) {
+      const id = parseInt(e.target.dataset.id);
+      const acc = await db.accounts.get(id);
+      if (!acc) return;
+      openEditAccountForm(acc);
+    }
+  };
+}
+// --- RENDER RESUMEN (continuación) ---
+// (Esta parte va justo después de la Parte 1A)
 
-    const returns = await db.returns.toArray();
-    let fullHtml = '';
+    // --- SECCIÓN DE DIVIDENDOS ---
+    const dividends = returns.filter(r => r.returnType === 'dividend');
+    if (dividends.length > 0) {
+      let totalBruto = dividends.reduce((sum, r) => sum + r.amount, 0);
+      fullHtml += `<div class="summary-card returns-section"><div class="group-title">Dividendos</div>`;
+      fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
-    if (returns.length > 0) {
-      const dividends = returns.filter(r => r.returnType === 'dividend');
-      const interests = returns.filter(r => r.returnType === 'interest');
-
-      const processType = (list, title, isDividend = false) => {
-        if (list.length === 0) return '';
-        let totalBruto = list.reduce((sum, r) => sum + r.amount, 0);
-        let html = `<div class="summary-card returns-section"><div class="group-title">${title}</div>`;
-        html += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}`;
-        if (isDividend) {
-          // No se muestra neto
+      // Por año (siempre visible)
+      const byYear = {};
+      for (const r of dividends) {
+        const year = new Date(r.date).getFullYear();
+        if (!byYear[year]) byYear[year] = 0;
+        byYear[year] += r.amount;
+      }
+      if (Object.keys(byYear).length > 0) {
+        fullHtml += `<div class="dividends-by-year">`;
+        const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
+        for (const year of sortedYears) {
+          const bruto = byYear[year];
+          fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
         }
-        html += `</strong></div>`;
+        fullHtml += `</div>`;
+      }
 
-        // Por año (siempre visible)
-        const byYear = {};
-        for (const r of list) {
-          const year = new Date(r.date).getFullYear();
-          if (!byYear[year]) byYear[year] = 0;
-          byYear[year] += r.amount;
-        }
-        if (Object.keys(byYear).length > 0) { // Mostrar siempre si hay años
-          html += `<div class="dividends-by-year">`;
-          const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
-          for (const year of sortedYears) {
-            const bruto = byYear[year];
-            html += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}`;
-            if (isDividend) {
-              // No se muestra neto
-            }
-            html += `</strong></div>`;
-          }
-          html += `</div>`;
-        }
+      // Botón detalle y selector de año (juntos)
+      fullHtml += `
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
+          <button id="toggleDividendosDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
+            Ver detalle
+          </button>
+          <select id="filterYearDividendos" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
+            <option value="">Todos</option>
+      `;
+      const allYearsDiv = [...new Set(dividends.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+      for (const year of allYearsDiv) {
+          fullHtml += `<option value="${year}">${year}</option>`;
+      }
+      fullHtml += `
+          </select>
+        </div>
+        <div id="DividendosDetail" style="display:none; margin-top:12px;">
+          <div id="filteredDetailDividendos"></div>
+        </div>
+      `;
+      fullHtml += `</div>`; // Cierre de Dividendos
+    }
 
-        // Botón detalle y selector de año (juntos)
-        html += `
-          <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
-            <button id="toggle${title.replace(/\s+/g, '')}Detail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
-              Ver detalle
-            </button>
-            <select id="filterYear${title.replace(/\s+/g, '')}" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
-              <option value="">Todos</option>
-        `;
-        const allYears = [...new Set(list.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
-        for (const year of allYears) {
-            html += `<option value="${year}">${year}</option>`;
-        }
-        html += `
-            </select>
-          </div>
-          <div id="${title.replace(/\s+/g, '')}Detail" style="display:none; margin-top:12px;">
-            <div id="filteredDetail${title.replace(/\s+/g, '')}"></div>
-          </div>
-        `;
-        return html;
-      };
+    // --- SECCIÓN DE INTERESES ---
+    const interests = returns.filter(r => r.returnType === 'interest');
+    if (interests.length > 0) {
+      let totalBruto = interests.reduce((sum, r) => sum + r.amount, 0);
+      fullHtml += `<div class="summary-card returns-section"><div class="group-title">Intereses</div>`;
+      fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
-      // CORRECCIÓN: Asignar correctamente el resultado de processType
-      fullHtml += processType(dividends, 'Dividendos', true);
-      fullHtml += processType(interests, 'Intereses', false);
+      // Por año (siempre visible)
+      const byYear = {};
+      for (const r of interests) {
+        const year = new Date(r.date).getFullYear();
+        if (!byYear[year]) byYear[year] = 0;
+        byYear[year] += r.amount;
+      }
+      if (Object.keys(byYear).length > 0) {
+        fullHtml += `<div class="dividends-by-year">`;
+        const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
+        for (const year of sortedYears) {
+          const bruto = byYear[year];
+          fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
+        }
+        fullHtml += `</div>`;
+      }
+
+      // Botón detalle y selector de año (juntos)
+      fullHtml += `
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
+          <button id="toggleInteresesDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
+            Ver detalle
+          </button>
+          <select id="filterYearIntereses" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
+            <option value="">Todos</option>
+      `;
+      const allYearsInt = [...new Set(interests.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+      for (const year of allYearsInt) {
+          fullHtml += `<option value="${year}">${year}</option>`;
+      }
+      fullHtml += `
+          </select>
+        </div>
+        <div id="InteresesDetail" style="display:none; margin-top:12px;">
+          <div id="filteredDetailIntereses"></div>
+        </div>
+      `;
+      fullHtml += `</div>`; // Cierre de Intereses
     }
 
     // --- SECCIÓN DE CUENTAS ---
