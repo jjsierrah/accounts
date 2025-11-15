@@ -1,48 +1,56 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#1a73e8">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#1a73e8"/>
+  <meta name="description" content="Gestor de cuentas bancarias offline"/>
   <title>JJ Bank Accounts</title>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css"/>
+  <link rel="manifest" href="manifest.json"/>
+  <!-- Tema instantáneo sin FOUC -->
+  <script>
+    const t = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  </script>
 </head>
 <body>
   <header>
     <h1>🏦 JJ Bank Accounts</h1>
-    <button id="menuToggle" aria-label="Abrir menú" style="
-      background: none;
-      border: none;
-      font-size: 1.8rem;
-      color: var(--text-primary);
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    ">☰</button>
+    <button id="menuToggle" aria-label="Abrir menú">
+      <span aria-hidden="true">☰</span>
+    </button>
   </header>
 
   <main>
     <section id="accounts-summary">
       <h2>Resumen de Cuentas</h2>
-      <div id="summary-totals">Cargando...</div>
+      <div id="summary-totals">Cargando…</div>
       <div id="summary-by-bank"></div>
     </section>
   </main>
 
+  <!-- Modal genérico -->
   <div id="modalOverlay" class="modal-overlay">
     <div id="modalContent" class="modal-content"></div>
   </div>
 
-  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
+  <!-- Drawer (se rellena con JS) -->
+  <div id="mainDrawer" class="main-drawer" aria-modal="true" aria-hidden="true">
+    <div class="drawer-content">
+      <div class="drawer-header">
+        <h3>Menú</h3>
+        <button class="close-drawer" aria-label="Cerrar menú">✕</button>
+      </div>
+      <ul class="drawer-menu"></ul>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="dexie.js"></script>   <!-- LOCAL -->
   <script src="app.js"></script>
-  
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js', { scope: './' });
-    }
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
   </script>
 </body>
 </html>
