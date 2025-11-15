@@ -578,6 +578,43 @@ h2 {
   color: #f0f0f0;
   border-color: #555;
 }
+/* === CORRECCIONES MÍNIMAS SOBRE TU CSS EXISTENTE === */
+
+/* 1. Evitar que el toast se duplique */
+#toast-notification {
+  pointer-events: none;          /* no bloquea clicks */
+  white-space: nowrap;           /* una sola línea */
+}
+
+/* 2. Drawer oculto por defecto (evita flash) */
+.main-drawer {
+  display: none;
+}
+
+/* 3. Aria oculta para iconos */
+[aria-hidden="true"] {
+  user-select: none;
+}
+
+/* 4. Indicador visual mientras arrastras cuenta */
+.asset-item.dragging {
+  opacity: .45;
+  transform: rotate(2deg);
+}
+
+/* 5. Botón copiar número (pequeño y discreto) */
+.btn-copy {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: .75rem;
+  padding: 2px 6px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.btn-copy:hover {
+  background: var(--filter-bg);
+}
 
 [data-theme="dark"] .value-account-toggle:hover {
   background-color: #4a4a4a;
