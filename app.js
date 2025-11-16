@@ -210,11 +210,6 @@ async function showAccountList() {
     }
   };
 }
-// Variables globales para el detalle de rendimientos
-let orderedAccountsForDetail = [];
-let dividendsForDetail = [];
-let interestsForDetail = [];
-
 // --- RENDER RESUMEN ---
 async function renderAccountsSummary() {
   const summaryTotals = document.getElementById('summary-totals');
@@ -362,10 +357,9 @@ async function renderAccountsSummary() {
       }
     }
 
-    // --- SECCIÓN DE CUENTAS ---
-    fullHtml += `<div class="summary-card accounts-section"><div class="group-title">Cuentas</div>`;
-    fullHtml += `<div id="account-list" class="account-list">`; // Contenedor para drag & drop
-    for (const acc of orderedAccountsForDetail) { // Usar la variable global aquí también
+    // --- SECCIÓN DE CUENTAS (sin contenedor adicional) ---
+    fullHtml += `<div class="group-title">Cuentas</div>`; // Título de Cuentas
+    for (const acc of orderedAccountsForDetail) { // Iterar directamente sobre las cuentas
       const holderLine = acc.holder2 ? `${acc.holder}<span style="font-size: 1rem;"> / ${acc.holder2}</span>` : acc.holder; // Titular 2 mismo tamaño
       const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en el texto principal
       // CORRECCIÓN: Borde completo si es cuenta de valores, sino lateral
@@ -382,14 +376,22 @@ async function renderAccountsSummary() {
         </div>
       `;
     }
-    fullHtml += `</div>`; // Cierre de cuenta-list
-    fullHtml += `</div>`; // Cierre de accounts-section
 
     summaryContainer.innerHTML = fullHtml;
 
     // --- LÓGICA DE DRAG & DROP ---
-    const list = document.getElementById('account-list');
+    // El contenedor para drag & drop ahora será summaryContainer mismo o un contenedor específico para las tarjetas de cuenta
+    // Dado que las tarjetas son hijos directos de summaryContainer, necesitamos un selector más específico
+    // Podemos usar la clase 'asset-item' para identificar los elementos arrastrables
+    // Y asumiremos que solo las tarjetas de cuenta serán hijos directos de summaryContainer en este nivel
+    // Si hay otros elementos como 'summary-card', se puede usar un selector más complejo si es necesario.
+    // En este caso, asumiremos que 'summaryContainer' contiene solo las tarjetas de cuenta como hijos directos.
+    const list = summaryContainer; // Ahora summaryContainer es el contenedor de drag & drop
+
+    // ... (mantener el resto de la lógica de drag & drop, pero aplicarla a 'list' que ahora es summaryContainer) ...
     if (list) {
+      // Asegurarse de que los listeners de drag no interfieran con otros elementos
+      // Filtrar para que solo se aplique a '.asset-item'
       list.addEventListener('dragstart', e => {
         if (e.target.classList.contains('asset-item')) {
           e.target.classList.add('dragging');
@@ -400,28 +402,62 @@ async function renderAccountsSummary() {
       list.addEventListener('dragover', e => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
+        const draggingElement = document.querySelector('.dragging');
+        if (draggingElement) {
+          const afterElement = getDragAfterElement(list, e.clientY);
+          const currentDraggable = afterElement || list.lastElementChild;
+          if (currentDraggable && currentDraggable !== draggingElement) {
+            list.insertBefore(draggingElement, currentDraggable);
+          } else if (currentDraggable === draggingElement) {
+             // Si el elemento ya está en la posición correcta, no hacer nada
+             return;
+          } else {
+             // Si no hay un elemento después y el último no es el que se arrastra, moverlo al final
+             if (list.lastElementChild !== draggingElement) {
+                 list.appendChild(draggingElement);
+             }
+          }
+        }
       });
       list.addEventListener('dragenter', e => {
-        e.preventDefault();
+        e.preventDefault(); // Prevenir el comportamiento por defecto
       });
       list.addEventListener('drop', e => {
         e.preventDefault();
         const dragging = document.querySelector('.dragging');
         if (dragging) {
-          const target = e.target.closest('.asset-item');
-          if (target && target !== dragging) {
-            const rect = target.getBoundingClientRect();
-            const next = rect.y + rect.height / 2 < e.clientY ? target.nextSibling : target;
-            list.insertBefore(dragging, next);
-            const ids = Array.from(list.children).map(el => parseInt(el.dataset.id));
-            saveCustomOrder(ids);
-          }
+          dragging.classList.remove('dragging');
+          const ids = Array.from(list.children)
+                           .filter(child => child.classList.contains('asset-item')) // Filtrar solo tarjetas de cuenta
+                           .map(el => parseInt(el.dataset.id));
+          saveCustomOrder(ids);
         }
       });
       list.addEventListener('dragend', e => {
-        e.target.classList.remove('dragging');
+        const draggingElement = e.target;
+        if (draggingElement.classList.contains('dragging')) {
+          draggingElement.classList.remove('dragging');
+        }
       });
     }
+
+    // Función auxiliar para determinar la posición de drop
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.asset-item:not(.dragging)')];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            // Si el offset es menor que 0, significa que el cursor está antes del centro del elemento
+            // y el elemento actual es el que debe estar después del que se arrastra
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
 
     // --- LÓGICA DE COPIAR AL PORTAPAPELES ---
     document.querySelectorAll('.btn-copy').forEach(btn => {
@@ -531,8 +567,8 @@ function updateDetailByYear(title, selectId, detailId) {
       if (!acc) continue;
       const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
       const amount = byAccount[accId];
-      // CORRECCIÓN: Detalle de cuentas sin negrita
-      html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}</div>`;
+      // CORRECCIÓN: Detalle de cuentas sin negrita (quitar <strong>)
+      html += `<div class="dividend-line">${displayName}: ${formatCurrency(amount)}</div>`;
     }
     detailDiv.innerHTML = html;
 }
@@ -838,6 +874,7 @@ async function openEditAccountForm(acc) {
     if (!bank || !holder || !accountNumber) {
       showToast('Completa todos los campos obligatorios.');
       return;
+      
     }
     await db.accounts.update(acc.id, { bank, description, accountNumber, isValueAccount, holder, holder2, currentBalance, color, note });
     document.getElementById('modalOverlay').style.display = 'none';
