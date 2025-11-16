@@ -369,7 +369,7 @@ async function renderAccountsSummary() {
       fullHtml += `
         <div class="asset-item${isValueAccountClass}" style="${borderStyle}" data-id="${acc.id}" draggable="true">
           <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
+          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;"></button><br>` : ''}
           Titular: ${holderLine}<br>
           Saldo: ${formatCurrency(acc.currentBalance)}<br>
           ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
@@ -465,10 +465,10 @@ async function renderAccountsSummary() {
         const number = e.target.dataset.number;
         if (number) {
           navigator.clipboard.writeText(number).then(() => {
-            showToast('✅ Nº de cuenta copiado.');
+            showToast(' Nº de cuenta copiado.');
           }).catch(err => {
             console.error('Error al copiar:', err);
-            showToast('❌ Error al copiar.');
+            showToast(' Error al copiar.');
           });
         }
       });
@@ -639,7 +639,7 @@ async function showAddAccountForm() {
       <label>Color de tarjeta:</label>
       <input type="color" id="color" value="#1a73e8" list="colorPalette">
       <datalist id="colorPalette">
-        <option value="#091891"></option> <!-- BBVA -->
+        <option value="#04128C"></option> <!-- BBVA -->
         <option value="#fb6405"></option> <!-- ING -->
         <option value="#04ac94"></option> <!-- N26 -->
         <option value="#eb0404"></option> <!-- Santander -->
@@ -877,7 +877,7 @@ async function openEditAccountForm(acc) {
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
-    }
+}
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
@@ -1117,50 +1117,53 @@ function setTheme(theme) {
 function initMenu() {
   function openDrawer() {
     let drawer = document.getElementById('mainDrawer');
-    if (!drawer) {
-      drawer = document.createElement('div');
-      drawer.id = 'mainDrawer';
-      drawer.className = 'main-drawer';
-      const currentTheme = getCurrentTheme();
-      const themeLabel = currentTheme === 'dark' ? '☀️ Modo claro' : '🌙 Modo oscuro';
-      drawer.innerHTML = `
-        <div class="drawer-content">
-          <div class="drawer-header">
-            <h3>Menú</h3>
-            <button class="close-drawer">&times;</button>
-          </div>
-          <ul class="drawer-menu">
-            <li><button data-action="add-account"><span>➕ Añadir Cuenta</span></button></li>
-            <li><button data-action="view-accounts"><span>🏦 Cuentas</span></button></li>
-            <li><button data-action="add-return"><span>💰 Añadir Rendimiento</span></button></li>
-            <li><button data-action="view-returns"><span>📊 Rendimientos</span></button></li>
-            <li><button data-action="import-export"><span>📤 Exportar / Importar</span></button></li>
-            <li><button data-action="theme-toggle"><span>${themeLabel}</span></button></li>
-            <li><button data-action="help"><span>ℹ️ Ayuda</span></button></li>
-          </ul>
-        </div>
-      `;
-      document.body.appendChild(drawer);
-      drawer.querySelector('.close-drawer').onclick = () => drawer.style.display = 'none';
-      drawer.onclick = (e) => { if (e.target === drawer) drawer.style.display = 'none'; };
-      drawer.querySelectorAll('[data-action]').forEach(btn => {
-        btn.onclick = () => {
-          drawer.style.display = 'none';
-          const a = btn.dataset.action;
-          if (a === 'add-account') showAddAccountForm();
-          else if (a === 'view-accounts') showAccountList();
-          else if (a === 'add-return') showAddReturnForm();
-          else if (a === 'view-returns') showReturnsList();
-          else if (a === 'import-export') showImportExport();
-          else if (a === 'theme-toggle') {
-            const newTheme = getCurrentTheme() === 'light' ? 'dark' : 'light';
-            setTheme(newTheme);
-            initMenu(); // <--- ESTA LÍNEA ACTUALIZA EL MENÚ DESPUÉS DEL CAMBIO DE TEMA
-          }
-          else if (a === 'help') showHelp();
-        };
-      });
+    // Si el drawer ya existe, lo quitamos para recrearlo con el estado actualizado
+    if (drawer) {
+       drawer.remove();
     }
+    // Creamos un nuevo drawer cada vez
+    drawer = document.createElement('div');
+    drawer.id = 'mainDrawer';
+    drawer.className = 'main-drawer';
+    const currentTheme = getCurrentTheme();
+    const themeLabel = currentTheme === 'dark' ? '☀️ Modo claro' : '🌙 Modo oscuro';
+    drawer.innerHTML = `
+      <div class="drawer-content">
+        <div class="drawer-header">
+          <h3>Menú</h3>
+          <button class="close-drawer">&times;</button>
+        </div>
+        <ul class="drawer-menu">
+          <li><button data-action="add-account"><span>➕ Añadir Cuenta</span></button></li>
+          <li><button data-action="view-accounts"><span>🏦 Cuentas</span></button></li>
+          <li><button data-action="add-return"><span>💰 Añadir Rendimiento</span></button></li>
+          <li><button data-action="view-returns"><span>📊 Rendimientos</span></button></li>
+          <li><button data-action="import-export"><span>📤 Exportar / Importar</span></button></li>
+          <li><button data-action="theme-toggle"><span>${themeLabel}</span></button></li>
+          <li><button data-action="help"><span>ℹ️ Ayuda</span></button></li>
+        </ul>
+      </div>
+    `;
+    document.body.appendChild(drawer);
+    drawer.querySelector('.close-drawer').onclick = () => drawer.style.display = 'none';
+    drawer.onclick = (e) => { if (e.target === drawer) drawer.style.display = 'none'; };
+    drawer.querySelectorAll('[data-action]').forEach(btn => {
+      btn.onclick = () => {
+        drawer.style.display = 'none';
+        const a = btn.dataset.action;
+        if (a === 'add-account') showAddAccountForm();
+        else if (a === 'view-accounts') showAccountList();
+        else if (a === 'add-return') showAddReturnForm();
+        else if (a === 'view-returns') showReturnsList();
+        else if (a === 'import-export') showImportExport();
+        else if (a === 'theme-toggle') {
+          const newTheme = getCurrentTheme() === 'light' ? 'dark' : 'light';
+          setTheme(newTheme);
+          // No se llama a initMenu() aquí, se eliminará y recreará el drawer en la próxima apertura
+        }
+        else if (a === 'help') showHelp();
+      };
+    });
     drawer.style.display = 'flex';
   }
   document.getElementById('menuToggle')?.addEventListener('click', openDrawer);
