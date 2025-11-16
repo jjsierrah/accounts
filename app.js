@@ -210,6 +210,11 @@ async function showAccountList() {
     }
   };
 }
+// Variables globales para el detalle de rendimientos
+let orderedAccountsForDetail = [];
+let dividendsForDetail = [];
+let interestsForDetail = [];
+
 // --- RENDER RESUMEN ---
 async function renderAccountsSummary() {
   const summaryTotals = document.getElementById('summary-totals');
@@ -226,7 +231,7 @@ async function renderAccountsSummary() {
 
     // Cargar orden personalizado
     const customOrder = loadCustomOrder();
-    const orderedAccounts = [...accounts].sort((a, b) => {
+    orderedAccountsForDetail = [...accounts].sort((a, b) => {
       const aIndex = customOrder.indexOf(a.id);
       const bIndex = customOrder.indexOf(b.id);
       if (aIndex === -1 && bIndex === -1) return 0;
@@ -256,21 +261,23 @@ async function renderAccountsSummary() {
     `;
 
     const returns = await db.returns.toArray();
+
+    // Asignar las variables globales para el detalle
+    dividendsForDetail = returns.filter(r => r.returnType === 'dividend');
+    interestsForDetail = returns.filter(r => r.returnType === 'interest');
+
     let fullHtml = '';
 
     if (returns.length > 0) {
-      const dividends = returns.filter(r => r.returnType === 'dividend');
-      const interests = returns.filter(r => r.returnType === 'interest');
-
       // --- SECCIÓN DE DIVIDENDOS ---
-      if (dividends.length > 0) {
-        let totalBruto = dividends.reduce((sum, r) => sum + r.amount, 0);
+      if (dividendsForDetail.length > 0) {
+        let totalBruto = dividendsForDetail.reduce((sum, r) => sum + r.amount, 0);
         fullHtml += `<div class="summary-card returns-section"><div class="group-title">Dividendos</div>`;
         fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
         // Por año (siempre visible)
         const byYear = {};
-        for (const r of dividends) {
+        for (const r of dividendsForDetail) {
           const year = new Date(r.date).getFullYear();
           if (!byYear[year]) byYear[year] = 0;
           byYear[year] += r.amount;
@@ -294,7 +301,7 @@ async function renderAccountsSummary() {
             <select id="filterYearDividendos" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
               <option value="">Todos</option>
         `;
-        const allYearsDiv = [...new Set(dividends.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        const allYearsDiv = [...new Set(dividendsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
         for (const year of allYearsDiv) {
             fullHtml += `<option value="${year}">${year}</option>`;
         }
@@ -309,14 +316,14 @@ async function renderAccountsSummary() {
       }
 
       // --- SECCIÓN DE INTERESES ---
-      if (interests.length > 0) {
-        let totalBruto = interests.reduce((sum, r) => sum + r.amount, 0);
+      if (interestsForDetail.length > 0) {
+        let totalBruto = interestsForDetail.reduce((sum, r) => sum + r.amount, 0);
         fullHtml += `<div class="summary-card returns-section"><div class="group-title">Intereses</div>`;
         fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
         // Por año (siempre visible)
         const byYear = {};
-        for (const r of interests) {
+        for (const r of interestsForDetail) {
           const year = new Date(r.date).getFullYear();
           if (!byYear[year]) byYear[year] = 0;
           byYear[year] += r.amount;
@@ -340,7 +347,7 @@ async function renderAccountsSummary() {
             <select id="filterYearIntereses" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
               <option value="">Todos</option>
         `;
-        const allYearsInt = [...new Set(interests.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        const allYearsInt = [...new Set(interestsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
         for (const year of allYearsInt) {
             fullHtml += `<option value="${year}">${year}</option>`;
         }
@@ -358,7 +365,7 @@ async function renderAccountsSummary() {
     // --- SECCIÓN DE CUENTAS ---
     fullHtml += `<div class="summary-card accounts-section"><div class="group-title">Cuentas</div>`;
     fullHtml += `<div id="account-list" class="account-list">`; // Contenedor para drag & drop
-    for (const acc of orderedAccounts) {
+    for (const acc of orderedAccountsForDetail) { // Usar la variable global aquí también
       const holderLine = acc.holder2 ? `${acc.holder}<span style="font-size: 1rem;"> / ${acc.holder2}</span>` : acc.holder; // Titular 2 mismo tamaño
       const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en el texto principal
       // CORRECCIÓN: Borde completo si es cuenta de valores, sino lateral
@@ -497,6 +504,39 @@ async function renderAccountsSummary() {
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
 }
+
+// --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
+function updateDetailByYear(title, selectId, detailId) {
+    const yearSelect = document.getElementById(selectId);
+    const detailDiv = document.getElementById(detailId);
+    if (!yearSelect || !detailDiv) return;
+
+    const selectedYear = yearSelect.value;
+    // Usar las variables globales aquí
+    const allReturns = title === 'Dividendos' ? dividendsForDetail : interestsForDetail;
+    // Usar la variable global aquí
+    const accounts = orderedAccountsForDetail;
+    const accountMap = {};
+    accounts.forEach(a => accountMap[a.id] = a);
+
+    let html = '';
+    const filteredReturns = selectedYear ? allReturns.filter(r => new Date(r.date).getFullYear().toString() === selectedYear) : allReturns;
+    const byAccount = {};
+    for (const r of filteredReturns) {
+      if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
+      byAccount[r.accountId] += r.amount;
+    }
+    for (const accId in byAccount) {
+      const acc = accountMap[accId];
+      if (!acc) continue;
+      const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
+      const amount = byAccount[accId];
+      // CORRECCIÓN: Detalle de cuentas sin negrita
+      html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}</div>`;
+    }
+    detailDiv.innerHTML = html;
+}
+
 
 // --- INICIO ---
 document.addEventListener('DOMContentLoaded', () => {
