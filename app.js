@@ -441,7 +441,14 @@ async function renderAccountsSummary() {
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
         if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
             const yearSelect = document.getElementById('filterYearDividendos');
-            if (yearSelect) updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
+            if (yearSelect) {
+                // Asegurarse de que los listeners estén registrados antes de llamar a la función
+                if (!yearSelect.hasAttribute('data-listeners-set')) {
+                    yearSelect.setAttribute('data-listeners-set', 'true');
+                    yearSelect.onchange = () => updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
+                }
+                updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
+            }
         }
       };
     }
@@ -455,42 +462,24 @@ async function renderAccountsSummary() {
         this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
         if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
             const yearSelect = document.getElementById('filterYearIntereses');
-            if (yearSelect) updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
+            if (yearSelect) {
+                // Asegurarse de que los listeners estén registrados antes de llamar a la función
+                if (!yearSelect.hasAttribute('data-listeners-set')) {
+                    yearSelect.setAttribute('data-listeners-set', 'true');
+                    yearSelect.onchange = () => updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
+                }
+                updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
+            }
         }
       };
     }
 
-    // Lógica de filtro por año
-    function updateDetailByYear(title, selectId, detailId) {
-        const yearSelect = document.getElementById(selectId);
-        const detailDiv = document.getElementById(detailId);
-        if (!yearSelect || !detailDiv) return;
-
-        const selectedYear = yearSelect.value;
-        const allReturns = title === 'Dividendos' ? dividends : interests;
-        const accounts = orderedAccounts; // Usar la lista ordenada de cuentas
-        const accountMap = {};
-        accounts.forEach(a => accountMap[a.id] = a);
-
-        let html = '';
-        const filteredReturns = selectedYear ? allReturns.filter(r => new Date(r.date).getFullYear().toString() === selectedYear) : allReturns;
-        const byAccount = {};
-        for (const r of filteredReturns) {
-          if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
-          byAccount[r.accountId] += r.amount;
-        }
-        for (const accId in byAccount) {
-          const acc = accountMap[accId];
-          if (!acc) continue;
-          const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
-          const amount = byAccount[accId];
-          // CORRECCIÓN: Detalle de cuentas sin negrita
-          html += `<div class="dividend-line"><strong>${displayName}:</strong> ${formatCurrency(amount)}</div>`;
-        }
-        detailDiv.innerHTML = html;
-    }
-
-    // Eventos de cambio para los selects de filtro
+    // Lógica de filtro por año (ahora solo se registra si no existe listener)
+    // Los listeners se registran dinámicamente en los botones de toggle, solo si no existen
+    // por lo tanto, estas líneas se pueden eliminar si se implementa el código anterior
+    // ya que los listeners se manejan en los toggle.
+    // Se deja el código original comentado para referencia:
+    /*
     const yearSelectDiv = document.getElementById('filterYearDividendos');
     if (yearSelectDiv) {
         yearSelectDiv.onchange = () => updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
@@ -499,6 +488,7 @@ async function renderAccountsSummary() {
     if (yearSelectInt) {
         yearSelectInt.onchange = () => updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
     }
+    */
 
 
   } catch (err) {
