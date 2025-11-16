@@ -585,7 +585,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // initTheme(); // Se llama en Parte 3
   // initMenu();  // Se llama en Parte 3
 });
-
 // --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
@@ -672,39 +671,25 @@ async function showAddAccountForm() {
     }
   };
 
-  // Lógica para el input de saldo con formato numérico (punto para miles, coma para decimales)
-  const balanceInput = document.getElementById('currentBalance');
-  let lastValue = balanceInput.value;
-  balanceInput.addEventListener('input', (e) => {
-    let value = e.target.value;
-    // Permitir solo números, comas y puntos
-    value = value.replace(/[^\d,.]/g, '');
-    // Si tiene más de una coma, dejar solo la primera
-    const parts = value.split(',');
-    if (parts.length > 2) {
-      value = parts[0] + ',' + parts.slice(1).join('');
-    }
-    // Formatear visualmente (punto para miles, coma para decimales)
-    const [integer, decimal] = value.split(',');
-    if (integer) {
-      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-    }
-    // Solo mostramos el valor formateado, no lo cambiamos internamente
-    if (value !== e.target.value) {
-      e.target.value = value;
-    }
-    lastValue = value;
-  });
+  // NO se aplica formateo automático en el input de saldo
+  // const balanceInput = document.getElementById('currentBalance');
+  // let lastValue = balanceInput.value;
+  // balanceInput.addEventListener('input', (e) => { ... }); // Eliminado
 
   document.getElementById('btnSaveAccount').onclick = async () => {
-    let currentBalanceStr = balanceInput.value.trim(); // Usar el input formateado
+    let currentBalanceStr = document.getElementById('currentBalance').value.trim(); // Obtener el valor como string
     if (currentBalanceStr === '') {
       showToast('El saldo no puede estar vacío.');
       return;
     }
-    // Convertir de nuevo a número con coma como decimal
-    currentBalanceStr = currentBalanceStr.replace(/\./g, '').replace(',', '.');
+    // Validar y convertir el saldo
+    // Permitir solo números, comas y puntos
+    if (!/^\d*[\.,]?\d*$/.test(currentBalanceStr)) {
+      showToast('Formato de saldo inválido. Usa solo números y coma (,) o punto (.) para decimales.');
+      return;
+    }
+    // Reemplazar coma por punto para parsear como número
+    currentBalanceStr = currentBalanceStr.replace(',', '.');
     const currentBalance = parseFloat(currentBalanceStr);
     if (isNaN(currentBalance)) {
       showToast('Saldo inválido.');
@@ -742,9 +727,7 @@ async function openEditAccountForm(acc) {
   ])];
   const holderOptions = holders.map(h => `<option value="${h}">`).join('');
 
-  // Formatear saldo para mostrarlo en el input con formato numérico
-  const formattedBalance = formatNumber(acc.currentBalance);
-
+  // Mostrar el saldo actual sin formato especial en el input
   const form = `
     <div class="form-group">
       <label>Entidad:</label>
@@ -778,7 +761,7 @@ async function openEditAccountForm(acc) {
     </div>
     <div class="form-group">
       <label>Saldo actual (€):</label>
-      <input type="text" id="currentBalance" value="${formattedBalance}" required />
+      <input type="text" id="currentBalance" value="${acc.currentBalance}" required />
     </div>
     <div class="form-group">
       <label>Color de tarjeta:</label>
@@ -823,39 +806,25 @@ async function openEditAccountForm(acc) {
     }
   };
 
-  // Lógica para el input de saldo con formato numérico (punto para miles, coma para decimales)
-  const balanceInput = document.getElementById('currentBalance');
-  let lastValue = balanceInput.value;
-  balanceInput.addEventListener('input', (e) => {
-    let value = e.target.value;
-    // Permitir solo números, comas y puntos
-    value = value.replace(/[^\d,.]/g, '');
-    // Si tiene más de una coma, dejar solo la primera
-    const parts = value.split(',');
-    if (parts.length > 2) {
-      value = parts[0] + ',' + parts.slice(1).join('');
-    }
-    // Formatear visualmente (punto para miles, coma para decimales)
-    const [integer, decimal] = value.split(',');
-    if (integer) {
-      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-    }
-    // Solo mostramos el valor formateado, no lo cambiamos internamente
-    if (value !== e.target.value) {
-      e.target.value = value;
-    }
-    lastValue = value;
-  });
+  // NO se aplica formateo automático en el input de saldo de edición
+  // const balanceInput = document.getElementById('currentBalance');
+  // let lastValue = balanceInput.value;
+  // balanceInput.addEventListener('input', (e) => { ... }); // Eliminado
 
   document.getElementById('btnUpdateAccount').onclick = async () => {
-    let currentBalanceStr = balanceInput.value.trim(); // Usar el input formateado
+    let currentBalanceStr = document.getElementById('currentBalance').value.trim(); // Obtener el valor como string
     if (currentBalanceStr === '') {
       showToast('El saldo no puede estar vacío.');
       return;
     }
-    // Convertir de nuevo a número con coma como decimal
-    currentBalanceStr = currentBalanceStr.replace(/\./g, '').replace(',', '.');
+    // Validar y convertir el saldo
+    // Permitir solo números, comas y puntos
+    if (!/^\d*[\.,]?\d*$/.test(currentBalanceStr)) {
+      showToast('Formato de saldo inválido. Usa solo números y coma (,) o punto (.) para decimales.');
+      return;
+    }
+    // Reemplazar coma por punto para parsear como número
+    currentBalanceStr = currentBalanceStr.replace(',', '.');
     const currentBalance = parseFloat(currentBalanceStr);
     if (isNaN(currentBalance)) {
       showToast('Saldo inválido.');
@@ -918,44 +887,31 @@ async function showAddReturnForm() {
   `;
   openModal('Añadir Rendimiento', form);
 
-  // Lógica para el input de importe con formato numérico (punto para miles, coma para decimales)
-  const amountInput = document.getElementById('returnAmount');
-  let lastValue = amountInput.value;
-  amountInput.addEventListener('input', (e) => {
-    let value = e.target.value;
-    // Permitir solo números, comas y puntos
-    value = value.replace(/[^\d,.]/g, '');
-    // Si tiene más de una coma, dejar solo la primera
-    const parts = value.split(',');
-    if (parts.length > 2) {
-      value = parts[0] + ',' + parts.slice(1).join('');
-    }
-    // Formatear visualmente (punto para miles, coma para decimales)
-    const [integer, decimal] = value.split(',');
-    if (integer) {
-      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-    }
-    // Solo mostramos el valor formateado, no lo cambiamos internamente
-    if (value !== e.target.value) {
-      e.target.value = value;
-    }
-    lastValue = value;
-  });
+  // NO se aplica formateo automático en el input
+  // const amountInput = document.getElementById('returnAmount');
+  // let lastValue = amountInput.value;
+  // amountInput.addEventListener('input', (e) => { ... }); // Eliminado
 
   document.getElementById('btnSaveReturn').onclick = async () => {
-    let amountStr = amountInput.value.trim(); // Usar el input formateado
+    let amountStr = document.getElementById('returnAmount').value.trim(); // Obtener el valor como string
     if (amountStr === '') {
       showToast('El importe no puede estar vacío.');
       return;
     }
-    // Convertir de nuevo a número con coma como decimal
-    amountStr = amountStr.replace(/\./g, '').replace(',', '.');
-    const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount <= 0) {
-      showToast('Importe inválido.');
+    // Validar y convertir el importe
+    // Permitir solo números, comas y puntos
+    if (!/^\d*[\.,]?\d*$/.test(amountStr)) {
+      showToast('Formato de importe inválido. Usa solo números y coma (,) o punto (.) para decimales.');
       return;
     }
+    // Reemplazar coma por punto para parsear como número
+    amountStr = amountStr.replace(',', '.');
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount) || amount <= 0) {
+      showToast('Importe inválido o menor/igual a cero.');
+      return;
+    }
+
     const accountId = parseInt(document.getElementById('returnAccount').value);
     const returnType = document.getElementById('returnType').value;
     const date = document.getElementById('returnDate').value;
@@ -1017,9 +973,7 @@ async function showReturnsList() {
         const display = a.bank + (a.description ? ` (${a.description})` : '');
         return `<option value="${a.id}" ${a.id === ret.accountId ? 'selected' : ''}>${display}</option>`;
       }).join('');
-      // Formatear importe para mostrarlo en el input con formato numérico
-      const formattedAmount = formatNumber(ret.amount);
-
+      // Mostrar el importe original sin formato especial en el input
       const form = `
         <div class="form-group">
           <label>Cuenta:</label>
@@ -1034,7 +988,7 @@ async function showReturnsList() {
         </div>
         <div class="form-group">
           <label>Importe (€):</label>
-          <input type="text" id="editReturnAmount" value="${formattedAmount}" required />
+          <input type="text" id="editReturnAmount" value="${ret.amount}" required />
         </div>
         <div class="form-group">
           <label>Fecha:</label>
@@ -1048,44 +1002,31 @@ async function showReturnsList() {
       `;
       openModal('Editar Rendimiento', form);
 
-      // Lógica para el input de importe con formato en edición (punto para miles, coma para decimales)
-      const editAmountInput = document.getElementById('editReturnAmount');
-      let lastEditValue = editAmountInput.value;
-      editAmountInput.addEventListener('input', (e) => {
-        let value = e.target.value;
-        // Permitir solo números, comas y puntos
-        value = value.replace(/[^\d,.]/g, '');
-        // Si tiene más de una coma, dejar solo la primera
-        const parts = value.split(',');
-        if (parts.length > 2) {
-          value = parts[0] + ',' + parts.slice(1).join('');
-        }
-        // Formatear visualmente (punto para miles, coma para decimales)
-        const [integer, decimal] = value.split(',');
-        if (integer) {
-          const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-          value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
-        }
-        // Solo mostramos el valor formateado, no lo cambiamos internamente
-        if (value !== e.target.value) {
-          e.target.value = value;
-        }
-        lastEditValue = value;
-      });
+      // NO se aplica formateo automático en el input de edición
+      // const editAmountInput = document.getElementById('editReturnAmount');
+      // let lastEditValue = editAmountInput.value;
+      // editAmountInput.addEventListener('input', (e) => { ... }); // Eliminado
 
       document.getElementById('btnUpdateReturn').onclick = async () => {
-        let amountStr = editAmountInput.value.trim(); // Usar el input formateado
+        let amountStr = document.getElementById('editReturnAmount').value.trim(); // Obtener el valor como string
         if (amountStr === '') {
           showToast('El importe no puede estar vacío.');
           return;
         }
-        // Convertir de nuevo a número con coma como decimal
-        amountStr = amountStr.replace(/\./g, '').replace(',', '.');
-        const amount = parseFloat(amountStr);
-        if (isNaN(amount) || amount <= 0) {
-          showToast('Importe inválido.');
+        // Validar y convertir el importe
+        // Permitir solo números, comas y puntos
+        if (!/^\d*[\.,]?\d*$/.test(amountStr)) {
+          showToast('Formato de importe inválido. Usa solo números y coma (,) o punto (.) para decimales.');
           return;
         }
+        // Reemplazar coma por punto para parsear como número
+        amountStr = amountStr.replace(',', '.');
+        const amount = parseFloat(amountStr);
+        if (isNaN(amount) || amount <= 0) {
+          showToast('Importe inválido o menor/igual a cero.');
+          return;
+        }
+
         const accountId = parseInt(document.getElementById('editReturnAccount').value);
         const returnType = document.getElementById('editReturnType').value;
         const date = document.getElementById('editReturnDate').value;
