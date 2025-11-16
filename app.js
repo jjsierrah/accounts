@@ -561,13 +561,14 @@ function updateDetailByYear(title, selectId, detailId) {
       if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
       byAccount[r.accountId] += r.amount;
     }
-    for (const accId in byAccount) {
+    // --- NUEVO: Ordenar por importe de mayor a menor ---
+    const sortedEntries = Object.entries(byAccount).sort((a, b) => b[1] - a[1]);
+    for (const [accId, amount] of sortedEntries) { // Usar el array ordenado
       const acc = accountMap[accId];
       if (!acc) continue;
       const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
-      const amount = byAccount[accId];
-      // CORRECCIÓN: Detalle de cuentas sin negrita (quitar <strong>)
-      html += `<div class="dividend-line">${displayName}: ${formatCurrency(amount)}</div>`;
+      // --- NUEVO: Estilo para alinear el importe a la derecha y tamaño de letra menor ---
+      html += `<div class="dividend-line" style="font-size: 0.95rem; justify-content: space-between;"><span>${displayName}</span><span style="text-align: right;">${formatCurrency(amount)}</span></div>`;
     }
     detailDiv.innerHTML = html;
 }
