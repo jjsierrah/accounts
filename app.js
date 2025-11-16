@@ -672,36 +672,50 @@ async function showAddAccountForm() {
     }
   };
 
-  // NO se aplica formateo automático en el input de saldo
-  // const balanceInput = document.getElementById('currentBalance');
-  // let lastValue = balanceInput.value;
-  // balanceInput.addEventListener('input', (e) => { ... }); // Eliminado
+  // Lógica para el input de saldo con formato numérico (punto para miles, coma para decimales)
+  const balanceInput = document.getElementById('currentBalance');
+  let lastValue = balanceInput.value;
+  balanceInput.addEventListener('input', (e) => {
+    let value = e.target.value;
+    // Permitir solo números, comas y puntos
+    value = value.replace(/[^\d,.]/g, '');
+    // Si tiene más de una coma, dejar solo la primera
+    const parts = value.split(',');
+    if (parts.length > 2) {
+      value = parts[0] + ',' + parts.slice(1).join('');
+    }
+    // Formatear visualmente (punto para miles, coma para decimales)
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    // Solo mostramos el valor formateado, no lo cambiamos internamente
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
+  });
 
   document.getElementById('btnSaveAccount').onclick = async () => {
+    let currentBalanceStr = balanceInput.value.trim(); // Usar el input formateado
+    if (currentBalanceStr === '') {
+      showToast('El saldo no puede estar vacío.');
+      return;
+    }
+    // Convertir de nuevo a número con coma como decimal
+    currentBalanceStr = currentBalanceStr.replace(/\./g, '').replace(',', '.');
+    const currentBalance = parseFloat(currentBalanceStr);
+    if (isNaN(currentBalance)) {
+      showToast('Saldo inválido.');
+      return;
+    }
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
     const accountNumber = document.getElementById('accountNumber').value.trim();
     const isValueAccount = checkbox.checked; // Usar el checkbox
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
-    let currentBalanceStr = document.getElementById('currentBalance').value.trim(); // Obtener el valor como string
-    if (currentBalanceStr === '') {
-      showToast('El saldo no puede estar vacío.');
-      return;
-    }
-    // Validar y convertir el saldo
-    // Permitir solo números, comas y puntos
-    if (!/^\d*[\.,]?\d*$/.test(currentBalanceStr)) {
-      showToast('Formato de saldo inválido. Usa solo números y coma (,) o punto (.) para decimales.');
-      return;
-    }
-    // Reemplazar coma por punto para parsear como número
-    currentBalanceStr = currentBalanceStr.replace(',', '.');
-    const currentBalance = parseFloat(currentBalanceStr);
-    if (isNaN(currentBalance)) {
-      showToast('Saldo inválido.');
-      return;
-    }
     const color = document.getElementById('color').value;
     const note = document.getElementById('note').value.trim() || null;
     if (!bank || !holder || !accountNumber) {
@@ -728,7 +742,9 @@ async function openEditAccountForm(acc) {
   ])];
   const holderOptions = holders.map(h => `<option value="${h}">`).join('');
 
-  // Mostrar el saldo actual sin formato específico en el input
+  // Formatear saldo para mostrarlo en el input con formato numérico
+  const formattedBalance = formatNumber(acc.currentBalance);
+
   const form = `
     <div class="form-group">
       <label>Entidad:</label>
@@ -762,7 +778,7 @@ async function openEditAccountForm(acc) {
     </div>
     <div class="form-group">
       <label>Saldo actual (€):</label>
-      <input type="text" id="currentBalance" value="${acc.currentBalance}" required />
+      <input type="text" id="currentBalance" value="${formattedBalance}" required />
     </div>
     <div class="form-group">
       <label>Color de tarjeta:</label>
@@ -807,36 +823,50 @@ async function openEditAccountForm(acc) {
     }
   };
 
-  // NO se aplica formateo automático en el input de saldo de edición
-  // const balanceInput = document.getElementById('currentBalance');
-  // let lastValue = balanceInput.value;
-  // balanceInput.addEventListener('input', (e) => { ... }); // Eliminado
+  // Lógica para el input de saldo con formato numérico (punto para miles, coma para decimales)
+  const balanceInput = document.getElementById('currentBalance');
+  let lastValue = balanceInput.value;
+  balanceInput.addEventListener('input', (e) => {
+    let value = e.target.value;
+    // Permitir solo números, comas y puntos
+    value = value.replace(/[^\d,.]/g, '');
+    // Si tiene más de una coma, dejar solo la primera
+    const parts = value.split(',');
+    if (parts.length > 2) {
+      value = parts[0] + ',' + parts.slice(1).join('');
+    }
+    // Formatear visualmente (punto para miles, coma para decimales)
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    // Solo mostramos el valor formateado, no lo cambiamos internamente
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
+  });
 
   document.getElementById('btnUpdateAccount').onclick = async () => {
+    let currentBalanceStr = balanceInput.value.trim(); // Usar el input formateado
+    if (currentBalanceStr === '') {
+      showToast('El saldo no puede estar vacío.');
+      return;
+    }
+    // Convertir de nuevo a número con coma como decimal
+    currentBalanceStr = currentBalanceStr.replace(/\./g, '').replace(',', '.');
+    const currentBalance = parseFloat(currentBalanceStr);
+    if (isNaN(currentBalance)) {
+      showToast('Saldo inválido.');
+      return;
+    }
     const bank = document.getElementById('bank').value.trim();
     const description = document.getElementById('description').value.trim();
     const accountNumber = document.getElementById('accountNumber').value.trim();
     const isValueAccount = checkbox.checked; // Usar el checkbox
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
-    let currentBalanceStr = document.getElementById('currentBalance').value.trim(); // Obtener el valor como string
-    if (currentBalanceStr === '') {
-      showToast('El saldo no puede estar vacío.');
-      return;
-    }
-    // Validar y convertir el saldo
-    // Permitir solo números, comas y puntos
-    if (!/^\d*[\.,]?\d*$/.test(currentBalanceStr)) {
-      showToast('Formato de saldo inválido. Usa solo números y coma (,) o punto (.) para decimales.');
-      return;
-    }
-    // Reemplazar coma por punto para parsear como número
-    currentBalanceStr = currentBalanceStr.replace(',', '.');
-    const currentBalance = parseFloat(currentBalanceStr);
-    if (isNaN(currentBalance)) {
-      showToast('Saldo inválido.');
-      return;
-    }
     const color = document.getElementById('color').value;
     const note = document.getElementById('note').value.trim() || null;
     if (!bank || !holder || !accountNumber) {
@@ -847,7 +877,7 @@ async function openEditAccountForm(acc) {
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
-                                           }
+}
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
