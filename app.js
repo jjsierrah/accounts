@@ -944,9 +944,14 @@ async function showReturnsList() {
     const acc = accMap[r.accountId];
     const displayName = acc ? `${acc.bank}${acc.description ? ` (${acc.description})` : ''}` : 'Cuenta eliminada';
     const typeLabel = r.returnType === 'dividend' ? 'Dividendo' : 'Interés';
+    // --- NUEVO: Obtener estilos del borde basados en la cuenta ---
+    const colorStyle = acc?.color ? `color: ${acc.color};` : ''; // Color del texto principal (opcional)
+    const borderStyle = acc?.isValueAccount && acc?.color ? `border: 2px solid ${acc.color};` : (acc?.color ? `border-left: 4px solid ${acc.color};` : '');
+    const isValueAccountClass = acc?.isValueAccount ? ' value-account' : ''; // Clase para borde completo (opcional, si se usa en CSS)
+    // ---
     html += `
-      <div class="asset-item">
-        <strong>${displayName}</strong><br>
+      <div class="asset-item${isValueAccountClass}" style="${borderStyle}">
+        <strong style="${colorStyle}">${displayName}</strong><br>
         ${typeLabel}: ${formatCurrency(r.amount)} el ${formatDate(r.date)}${r.note ? ` - ${r.note}` : ''}
         <div class="modal-actions">
           <button class="btn-edit" data-id="${r.id}">Editar</button>
