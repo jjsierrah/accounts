@@ -877,7 +877,7 @@ async function openEditAccountForm(acc) {
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
   };
-}
+    }
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
@@ -1155,7 +1155,7 @@ function initMenu() {
           else if (a === 'theme-toggle') {
             const newTheme = getCurrentTheme() === 'light' ? 'dark' : 'light';
             setTheme(newTheme);
-            initMenu(); // Actualiza el texto del botón
+            initMenu(); // <--- ESTA LÍNEA ACTUALIZA EL MENÚ DESPUÉS DEL CAMBIO DE TEMA
           }
           else if (a === 'help') showHelp();
         };
