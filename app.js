@@ -210,6 +210,11 @@ async function showAccountList() {
     }
   };
 }
+// Variables globales para el detalle de rendimientos
+let orderedAccountsForDetail = [];
+let dividendsForDetail = [];
+let interestsForDetail = [];
+
 // --- RENDER RESUMEN ---
 async function renderAccountsSummary() {
   const summaryTotals = document.getElementById('summary-totals');
@@ -226,7 +231,7 @@ async function renderAccountsSummary() {
 
     // Cargar orden personalizado
     const customOrder = loadCustomOrder();
-    const orderedAccounts = [...accounts].sort((a, b) => {
+    orderedAccountsForDetail = [...accounts].sort((a, b) => {
       const aIndex = customOrder.indexOf(a.id);
       const bIndex = customOrder.indexOf(b.id);
       if (aIndex === -1 && bIndex === -1) return 0;
@@ -256,21 +261,23 @@ async function renderAccountsSummary() {
     `;
 
     const returns = await db.returns.toArray();
+
+    // Asignar las variables globales para el detalle
+    dividendsForDetail = returns.filter(r => r.returnType === 'dividend');
+    interestsForDetail = returns.filter(r => r.returnType === 'interest');
+
     let fullHtml = '';
 
     if (returns.length > 0) {
-      const dividends = returns.filter(r => r.returnType === 'dividend');
-      const interests = returns.filter(r => r.returnType === 'interest');
-
       // --- SECCIÓN DE DIVIDENDOS ---
-      if (dividends.length > 0) {
-        let totalBruto = dividends.reduce((sum, r) => sum + r.amount, 0);
+      if (dividendsForDetail.length > 0) {
+        let totalBruto = dividendsForDetail.reduce((sum, r) => sum + r.amount, 0);
         fullHtml += `<div class="summary-card returns-section"><div class="group-title">Dividendos</div>`;
         fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
         // Por año (siempre visible)
         const byYear = {};
-        for (const r of dividends) {
+        for (const r of dividendsForDetail) {
           const year = new Date(r.date).getFullYear();
           if (!byYear[year]) byYear[year] = 0;
           byYear[year] += r.amount;
@@ -294,7 +301,7 @@ async function renderAccountsSummary() {
             <select id="filterYearDividendos" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; min-height: 48px; height: 100%;">
               <option value="">Todos</option>
         `;
-        const allYearsDiv = [...new Set(dividends.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        const allYearsDiv = [...new Set(dividendsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
         for (const year of allYearsDiv) {
             fullHtml += `<option value="${year}">${year}</option>`;
         }
@@ -309,14 +316,14 @@ async function renderAccountsSummary() {
       }
 
       // --- SECCIÓN DE INTERESES ---
-      if (interests.length > 0) {
-        let totalBruto = interests.reduce((sum, r) => sum + r.amount, 0);
+      if (interestsForDetail.length > 0) {
+        let totalBruto = interestsForDetail.reduce((sum, r) => sum + r.amount, 0);
         fullHtml += `<div class="summary-card returns-section"><div class="group-title">Intereses</div>`;
         fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
         // Por año (siempre visible)
         const byYear = {};
-        for (const r of interests) {
+        for (const r of interestsForDetail) {
           const year = new Date(r.date).getFullYear();
           if (!byYear[year]) byYear[year] = 0;
           byYear[year] += r.amount;
@@ -340,7 +347,7 @@ async function renderAccountsSummary() {
             <select id="filterYearIntereses" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; min-height: 48px; height: 100%;">
               <option value="">Todos</option>
         `;
-        const allYearsInt = [...new Set(interests.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        const allYearsInt = [...new Set(interestsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
         for (const year of allYearsInt) {
             fullHtml += `<option value="${year}">${year}</option>`;
         }
@@ -357,7 +364,7 @@ async function renderAccountsSummary() {
 
     // --- SECCIÓN DE CUENTAS ---
     fullHtml += `<div class="group-title">Cuentas</div>`; // Título de Cuentas
-    for (const acc of orderedAccounts) { // Iterar directamente sobre las cuentas
+    for (const acc of orderedAccountsForDetail) { // Usar la variable global aquí también
       const holderLine = acc.holder2 ? `${acc.holder}<span style="font-size: 1rem;"> / ${acc.holder2}</span>` : acc.holder; // Titular 2 mismo tamaño
       const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en el texto principal
       // CORRECCIÓN: Borde completo si es cuenta de valores, sino lateral
@@ -378,12 +385,6 @@ async function renderAccountsSummary() {
     summaryContainer.innerHTML = fullHtml;
 
     // --- LÓGICA DE DRAG & DROP ---
-    // El contenedor para drag & drop ahora será summaryContainer mismo o un contenedor específico para las tarjetas de cuenta
-    // Dado que las tarjetas son hijos directos de summaryContainer, necesitamos un selector más específico
-    // Podemos usar la clase 'asset-item' para identificar los elementos arrastrables
-    // Y asumiremos que solo las tarjetas de cuenta serán hijos directos de summaryContainer en este nivel
-    // Si hay otros elementos como 'summary-card', se puede usar un selector más complejo si es necesario.
-    // En este caso, asumiremos que 'summaryContainer' contiene solo las tarjetas de cuenta como hijos directos.
     const list = summaryContainer; // Ahora summaryContainer es el contenedor de drag & drop
 
     // ... (mantener el resto de la lógica de drag & drop, pero aplicarla a 'list' que ahora es summaryContainer) ...
@@ -584,6 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // initTheme(); // Se llama en Parte 3
   // initMenu();  // Se llama en Parte 3
 });
+
 // --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
@@ -782,7 +784,7 @@ async function openEditAccountForm(acc) {
       <label>Color de tarjeta:</label>
       <input type="color" id="color" value="${acc.color || '#1a73e8'}" list="colorPalette">
       <datalist id="colorPalette">
-        <option value="#04128c"></option> <!-- BBVA -->
+        <option value="#04128C"></option> <!-- BBVA -->
         <option value="#fb6405"></option> <!-- ING -->
         <option value="#04ac94"></option> <!-- N26 -->
         <option value="#eb0404"></option> <!-- Santander -->
