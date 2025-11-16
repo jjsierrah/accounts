@@ -36,23 +36,23 @@ function formatDate(dateString) {
 }
 
 function formatCurrency(value) {
-  // Cambio aquí: formato de moneda con punto para miles y coma para decimales
+  // Formato de moneda con punto para miles y coma para decimales
   return new Intl.NumberFormat('es-ES', {
     style: 'currency',
     currency: 'EUR',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     useGrouping: true
-  }).format(value).replace(/\./g, '#TEMP_DOT#').replace(',', '.').replace(/#TEMP_DOT#/g, ',');
+  }).format(value);
 }
 
 function formatNumber(value) {
-  // Cambio aquí: formato numérico con punto para miles y coma para decimales
+  // Formato numérico con punto para miles y coma para decimales
   return new Intl.NumberFormat('es-ES', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     useGrouping: true
-  }).format(value).replace(/\./g, '#TEMP_DOT#').replace(',', '.').replace(/#TEMP_DOT#/g, ',');
+  }).format(value);
 }
 
 // --- FORMATO IBAN ---
@@ -918,33 +918,44 @@ async function showAddReturnForm() {
   `;
   openModal('Añadir Rendimiento', form);
 
-  // NO se aplica formateo automático en el input
-  // const amountInput = document.getElementById('returnAmount');
-  // let lastValue = amountInput.value;
-  // amountInput.addEventListener('input', (e) => {
-  //    ... (lógica de formateo anterior eliminada) ...
-  // });
+  // Lógica para el input de importe con formato numérico (punto para miles, coma para decimales)
+  const amountInput = document.getElementById('returnAmount');
+  let lastValue = amountInput.value;
+  amountInput.addEventListener('input', (e) => {
+    let value = e.target.value;
+    // Permitir solo números, comas y puntos
+    value = value.replace(/[^\d,.]/g, '');
+    // Si tiene más de una coma, dejar solo la primera
+    const parts = value.split(',');
+    if (parts.length > 2) {
+      value = parts[0] + ',' + parts.slice(1).join('');
+    }
+    // Formatear visualmente (punto para miles, coma para decimales)
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    // Solo mostramos el valor formateado, no lo cambiamos internamente
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
+  });
 
   document.getElementById('btnSaveReturn').onclick = async () => {
-    let amountStr = document.getElementById('returnAmount').value.trim(); // Obtener el valor como string
+    let amountStr = amountInput.value.trim(); // Usar el input formateado
     if (amountStr === '') {
       showToast('El importe no puede estar vacío.');
       return;
     }
-    // Validar y convertir el importe
-    // Permitir solo números, comas y puntos
-    if (!/^\d*[\.,]?\d*$/.test(amountStr)) {
-      showToast('Formato de importe inválido. Usa solo números y coma (,) o punto (.) para decimales.');
-      return;
-    }
-    // Reemplazar coma por punto para parsear como número
-    amountStr = amountStr.replace(',', '.');
+    // Convertir de nuevo a número con coma como decimal
+    amountStr = amountStr.replace(/\./g, '').replace(',', '.');
     const amount = parseFloat(amountStr);
     if (isNaN(amount) || amount <= 0) {
-      showToast('Importe inválido o menor/igual a cero.');
+      showToast('Importe inválido.');
       return;
     }
-
     const accountId = parseInt(document.getElementById('returnAccount').value);
     const returnType = document.getElementById('returnType').value;
     const date = document.getElementById('returnDate').value;
@@ -1006,7 +1017,9 @@ async function showReturnsList() {
         const display = a.bank + (a.description ? ` (${a.description})` : '');
         return `<option value="${a.id}" ${a.id === ret.accountId ? 'selected' : ''}>${display}</option>`;
       }).join('');
-      // Mostrar el importe original sin formato especial en el input
+      // Formatear importe para mostrarlo en el input con formato numérico
+      const formattedAmount = formatNumber(ret.amount);
+
       const form = `
         <div class="form-group">
           <label>Cuenta:</label>
@@ -1021,7 +1034,7 @@ async function showReturnsList() {
         </div>
         <div class="form-group">
           <label>Importe (€):</label>
-          <input type="text" id="editReturnAmount" value="${ret.amount}" required />
+          <input type="text" id="editReturnAmount" value="${formattedAmount}" required />
         </div>
         <div class="form-group">
           <label>Fecha:</label>
@@ -1035,33 +1048,44 @@ async function showReturnsList() {
       `;
       openModal('Editar Rendimiento', form);
 
-      // NO se aplica formateo automático en el input de edición
-      // const editAmountInput = document.getElementById('editReturnAmount');
-      // let lastEditValue = editAmountInput.value;
-      // editAmountInput.addEventListener('input', (e) => {
-      //    ... (lógica de formateo anterior eliminada) ...
-      // });
+      // Lógica para el input de importe con formato en edición (punto para miles, coma para decimales)
+      const editAmountInput = document.getElementById('editReturnAmount');
+      let lastEditValue = editAmountInput.value;
+      editAmountInput.addEventListener('input', (e) => {
+        let value = e.target.value;
+        // Permitir solo números, comas y puntos
+        value = value.replace(/[^\d,.]/g, '');
+        // Si tiene más de una coma, dejar solo la primera
+        const parts = value.split(',');
+        if (parts.length > 2) {
+          value = parts[0] + ',' + parts.slice(1).join('');
+        }
+        // Formatear visualmente (punto para miles, coma para decimales)
+        const [integer, decimal] = value.split(',');
+        if (integer) {
+          const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+          value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+        }
+        // Solo mostramos el valor formateado, no lo cambiamos internamente
+        if (value !== e.target.value) {
+          e.target.value = value;
+        }
+        lastEditValue = value;
+      });
 
       document.getElementById('btnUpdateReturn').onclick = async () => {
-        let amountStr = document.getElementById('editReturnAmount').value.trim(); // Obtener el valor como string
+        let amountStr = editAmountInput.value.trim(); // Usar el input formateado
         if (amountStr === '') {
           showToast('El importe no puede estar vacío.');
           return;
         }
-        // Validar y convertir el importe
-        // Permitir solo números, comas y puntos
-        if (!/^\d*[\.,]?\d*$/.test(amountStr)) {
-          showToast('Formato de importe inválido. Usa solo números y coma (,) o punto (.) para decimales.');
-          return;
-        }
-        // Reemplazar coma por punto para parsear como número
-        amountStr = amountStr.replace(',', '.');
+        // Convertir de nuevo a número con coma como decimal
+        amountStr = amountStr.replace(/\./g, '').replace(',', '.');
         const amount = parseFloat(amountStr);
         if (isNaN(amount) || amount <= 0) {
-          showToast('Importe inválido o menor/igual a cero.');
+          showToast('Importe inválido.');
           return;
         }
-
         const accountId = parseInt(document.getElementById('editReturnAccount').value);
         const returnType = document.getElementById('editReturnType').value;
         const date = document.getElementById('editReturnDate').value;
