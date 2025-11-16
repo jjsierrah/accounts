@@ -210,11 +210,6 @@ async function showAccountList() {
     }
   };
 }
-// Variables globales para el detalle de rendimientos
-let orderedAccountsForDetail = [];
-let dividendsForDetail = [];
-let interestsForDetail = [];
-
 // --- RENDER RESUMEN ---
 async function renderAccountsSummary() {
   const summaryTotals = document.getElementById('summary-totals');
@@ -269,15 +264,18 @@ async function renderAccountsSummary() {
     let fullHtml = '';
 
     if (returns.length > 0) {
+      const dividends = dividendsForDetail; // Usar la variable global
+      const interests = interestsForDetail; // Usar la variable global
+
       // --- SECCIÓN DE DIVIDENDOS ---
-      if (dividendsForDetail.length > 0) {
-        let totalBruto = dividendsForDetail.reduce((sum, r) => sum + r.amount, 0);
+      if (dividends.length > 0) {
+        let totalBruto = dividends.reduce((sum, r) => sum + r.amount, 0);
         fullHtml += `<div class="summary-card returns-section"><div class="group-title">Dividendos</div>`;
         fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
         // Por año (siempre visible)
         const byYear = {};
-        for (const r of dividendsForDetail) {
+        for (const r of dividends) {
           const year = new Date(r.date).getFullYear();
           if (!byYear[year]) byYear[year] = 0;
           byYear[year] += r.amount;
@@ -292,21 +290,55 @@ async function renderAccountsSummary() {
           fullHtml += `</div>`;
         }
 
-        // Botón detalle y selector de año (juntos)
+        // Botón detalle y selector de año (juntos) - OPCIÓN 1: Contenedor para estilo de botón
         fullHtml += `
           <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
             <button id="toggleDividendosDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
               Ver detalle
             </button>
-            <select id="filterYearDividendos" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; min-height: 48px; height: 100%;">
-              <option value="">Todos</option>
+            <div class="select-button-wrapper" style="
+              display: inline-block;
+              position: relative;
+              min-height: 48px;
+              min-width: 80px; /* Ajusta según sea necesario */
+            ">
+              <select id="filterYearDividendos" class="year-filter btn-primary" style="
+                width: 100%;
+                height: 100%;
+                padding: 10px;
+                font-size: 0.95rem;
+                border: none;
+                border-radius: 10px;
+                background: #1a73e8;
+                color: white;
+                cursor: pointer;
+                box-shadow: 0 2px 4px var(--shadow);
+                transition: background 0.2s;
+                /* Ajuste para que el texto no se corte */
+                padding-right: 30px; /* Espacio para la flecha */
+              ">
+                <option value="">Todos</option>
         `;
-        const allYearsDiv = [...new Set(dividendsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        const allYearsDiv = [...new Set(dividends.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
         for (const year of allYearsDiv) {
             fullHtml += `<option value="${year}">${year}</option>`;
         }
         fullHtml += `
-            </select>
+              </select>
+              <!-- Flecha personalizada -->
+              <div style="
+                position: absolute;
+                top: 50%;
+                right: 10px;
+                transform: translateY(-50%);
+                width: 0;
+                height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid white; /* Color de la flecha */
+                pointer-events: none; /* No interfiera con clics */
+              "></div>
+            </div>
           </div>
           <div id="DividendosDetail" style="display:none; margin-top:12px;">
             <div id="filteredDetailDividendos"></div>
@@ -316,14 +348,14 @@ async function renderAccountsSummary() {
       }
 
       // --- SECCIÓN DE INTERESES ---
-      if (interestsForDetail.length > 0) {
-        let totalBruto = interestsForDetail.reduce((sum, r) => sum + r.amount, 0);
+      if (interests.length > 0) {
+        let totalBruto = interests.reduce((sum, r) => sum + r.amount, 0);
         fullHtml += `<div class="summary-card returns-section"><div class="group-title">Intereses</div>`;
         fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
         // Por año (siempre visible)
         const byYear = {};
-        for (const r of interestsForDetail) {
+        for (const r of interests) {
           const year = new Date(r.date).getFullYear();
           if (!byYear[year]) byYear[year] = 0;
           byYear[year] += r.amount;
@@ -338,21 +370,55 @@ async function renderAccountsSummary() {
           fullHtml += `</div>`;
         }
 
-        // Botón detalle y selector de año (juntos)
+        // Botón detalle y selector de año (juntos) - OPCIÓN 1: Contenedor para estilo de botón
         fullHtml += `
           <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
             <button id="toggleInteresesDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
               Ver detalle
             </button>
-            <select id="filterYearIntereses" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; min-height: 48px; height: 100%;">
-              <option value="">Todos</option>
+            <div class="select-button-wrapper" style="
+              display: inline-block;
+              position: relative;
+              min-height: 48px;
+              min-width: 80px; /* Ajusta según sea necesario */
+            ">
+              <select id="filterYearIntereses" class="year-filter btn-primary" style="
+                width: 100%;
+                height: 100%;
+                padding: 10px;
+                font-size: 0.95rem;
+                border: none;
+                border-radius: 10px;
+                background: #1a73e8;
+                color: white;
+                cursor: pointer;
+                box-shadow: 0 2px 4px var(--shadow);
+                transition: background 0.2s;
+                /* Ajuste para que el texto no se corte */
+                padding-right: 30px; /* Espacio para la flecha */
+              ">
+                <option value="">Todos</option>
         `;
-        const allYearsInt = [...new Set(interestsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        const allYearsInt = [...new Set(interests.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
         for (const year of allYearsInt) {
             fullHtml += `<option value="${year}">${year}</option>`;
         }
         fullHtml += `
-            </select>
+              </select>
+              <!-- Flecha personalizada -->
+              <div style="
+                position: absolute;
+                top: 50%;
+                right: 10px;
+                transform: translateY(-50%);
+                width: 0;
+                height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid white; /* Color de la flecha */
+                pointer-events: none; /* No interfiera con clics */
+              "></div>
+            </div>
           </div>
           <div id="InteresesDetail" style="display:none; margin-top:12px;">
             <div id="filteredDetailIntereses"></div>
