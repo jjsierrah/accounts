@@ -1,5 +1,3 @@
-
-
 // --- IndexedDB ---
 const db = new Dexie('JJBankAccountsDB');
 db.version(2).stores({
@@ -588,382 +586,268 @@ document.addEventListener('DOMContentLoaded', () => {
   // initTheme(); // Se llama en Parte 3
   // initMenu();  // Se llama en Parte 3
 });
-// --- RENDER RESUMEN ---
-async function renderAccountsSummary() {
-  const summaryTotals = document.getElementById('summary-totals');
-  const summaryContainer = document.getElementById('summary-by-bank');
-  if (!summaryTotals || !summaryContainer) return;
+// --- FORMULARIOS DE CUENTAS ---
+async function showAddAccountForm() {
+  // Obtener entidades existentes para datalist
+  const allAccounts = await db.accounts.toArray();
+  const banks = [...new Set(allAccounts.map(a => a.bank))];
+  const bankOptions = banks.map(b => `<option value="${b}">`).join('');
 
-  try {
-    const accounts = await db.accounts.toArray();
-    if (accounts.length === 0) {
-      summaryTotals.innerHTML = '<p>No hay cuentas. Añade una desde el menú.</p>';
-      summaryContainer.innerHTML = '';
+  // Obtener titulares existentes para datalist (común)
+  const holders = [...new Set([
+    ...allAccounts.map(a => a.holder),
+    ...allAccounts.map(a => a.holder2).filter(h => h)
+  ])];
+  const holderOptions = holders.map(h => `<option value="${h}">`).join('');
+
+  const form = `
+    <div class="form-group">
+      <label>Entidad:</label>
+      <input type="text" id="bank" list="banks" placeholder="Ej: BBVA, Santander..." required />
+      <datalist id="banks">${bankOptions}</datalist>
+    </div>
+    <div class="form-group">
+      <label>Descripción:</label>
+      <input type="text" id="description" placeholder="Ej: Cuenta nómina, Ahorros..." />
+    </div>
+    <div class="form-group">
+      <label>Cuenta de Valores</label>
+      <label id="isValueAccountLabel" class="value-account-toggle" style="display: inline-block; padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; user-select: none; background-color: #f0f0f0; color: #333;">
+        <input type="checkbox" id="isValueAccount" style="display: none;">
+        <span>🏷️ No</span>
+      </label>
+    </div>
+    <div class="form-group">
+      <label>Nº de Cuenta (IBAN):</label>
+      <input type="text" id="accountNumber" placeholder="Ej: ES12 1234 5678 9012 3456 7890" required />
+    </div>
+    <div class="form-group">
+      <label>Titular principal:</label>
+      <input type="text" id="holder" list="holders" required />
+      <datalist id="holders">${holderOptions}</datalist>
+    </div>
+    <div class="form-group">
+      <label>Segundo titular:</label>
+      <input type="text" id="holder2" list="holders" />
+      <datalist id="holders">${holderOptions}</datalist>
+    </div>
+    <div class="form-group">
+      <label>Saldo actual (€):</label>
+      <input type="text" id="currentBalance" placeholder="0,00" required />
+    </div>
+    <div class="form-group">
+      <label>Color de tarjeta:</label>
+      <input type="color" id="color" value="#1a73e8" list="colorPalette">
+      <datalist id="colorPalette">
+        <option value="#091891"></option> <!-- BBVA -->
+        <option value="#fb6405"></option> <!-- ING -->
+        <option value="#04ac94"></option> <!-- N26 -->
+        <option value="#eb0404"></option> <!-- Santander -->
+        <option value="#21da60"></option> <!-- Trade Republic -->
+        <option value="#1496d2"></option> <!-- Revolut -->
+        <option value="#b3dded"></option> <!-- azul grisáceo -->
+        <option value="#f8f49c"></option> <!-- Amarillo -->
+      </datalist>
+    </div>
+    <div class="form-group">
+      <label>Nota:</label>
+      <input type="text" id="note" placeholder="Ej: Cuenta personal, Negocio..." />
+    </div>
+    <button id="btnSaveAccount" class="btn-primary">Añadir Cuenta</button>
+  `;
+  openModal('Añadir Cuenta', form);
+
+  // Lógica para el toggle de "Cuenta de Valores"
+  const toggleLabel = document.getElementById('isValueAccountLabel');
+  const checkbox = document.getElementById('isValueAccount');
+  toggleLabel.onclick = () => {
+    checkbox.checked = !checkbox.checked;
+    toggleLabel.querySelector('span').textContent = checkbox.checked ? '🏷️ Sí' : '🏷️ No';
+    // Actualizar placeholder del número de cuenta
+    const accountNumberInput = document.getElementById('accountNumber');
+    if (checkbox.checked) {
+      accountNumberInput.placeholder = "Ej: DE000A12B3C4";
+    } else {
+      accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
+    }
+  };
+
+  // NO se aplica formateo automático en el input de saldo
+  // const balanceInput = document.getElementById('currentBalance');
+  // let lastValue = balanceInput.value;
+  // balanceInput.addEventListener('input', (e) => { ... }); // Eliminado
+
+  document.getElementById('btnSaveAccount').onclick = async () => {
+    const bank = document.getElementById('bank').value.trim();
+    const description = document.getElementById('description').value.trim();
+    const accountNumber = document.getElementById('accountNumber').value.trim();
+    const isValueAccount = checkbox.checked; // Usar el checkbox
+    const holder = document.getElementById('holder').value.trim();
+    const holder2 = document.getElementById('holder2').value.trim() || null;
+    let currentBalanceStr = document.getElementById('currentBalance').value.trim(); // Obtener el valor como string
+    if (currentBalanceStr === '') {
+      showToast('El saldo no puede estar vacío.');
       return;
     }
-
-    // Cargar orden personalizado
-    const customOrder = loadCustomOrder();
-    orderedAccountsForDetail = [...accounts].sort((a, b) => {
-      const aIndex = customOrder.indexOf(a.id);
-      const bIndex = customOrder.indexOf(b.id);
-      if (aIndex === -1 && bIndex === -1) return 0;
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
-    });
-
-    // Calcular totales
-    let totalBalanceAccounts = 0;
-    let totalBalanceValues = 0;
-    for (const acc of accounts) {
-      if (acc.isValueAccount) {
-        totalBalanceValues += acc.currentBalance || 0;
-      } else {
-        totalBalanceAccounts += acc.currentBalance || 0;
-      }
+    // Validar y convertir el saldo
+    // Permitir solo números, comas y puntos
+    if (!/^\d*[\.,]?\d*$/.test(currentBalanceStr)) {
+      showToast('Formato de saldo inválido. Usa solo números y coma (,) o punto (.) para decimales.');
+      return;
     }
-
-    summaryTotals.innerHTML = `
-      <div class="summary-card">
-        <div class="dividend-line"><strong>Saldo (Cuentas):</strong> <strong>${formatCurrency(totalBalanceAccounts)}</strong></div>
-        <div class="dividend-line"><strong>Saldo (Valores):</strong> <strong>${formatCurrency(totalBalanceValues)}</strong></div>
-        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
-        <div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBalanceAccounts + totalBalanceValues)}</strong></div>
-      </div>
-    `;
-
-    const returns = await db.returns.toArray();
-
-    // Asignar las variables globales para el detalle
-    dividendsForDetail = returns.filter(r => r.returnType === 'dividend');
-    interestsForDetail = returns.filter(r => r.returnType === 'interest');
-
-    let fullHtml = '';
-
-    if (returns.length > 0) {
-      // --- SECCIÓN DE DIVIDENDOS ---
-      if (dividendsForDetail.length > 0) {
-        let totalBruto = dividendsForDetail.reduce((sum, r) => sum + r.amount, 0);
-        fullHtml += `<div class="summary-card returns-section"><div class="group-title">Dividendos</div>`;
-        fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
-
-        // Por año (siempre visible)
-        const byYear = {};
-        for (const r of dividendsForDetail) {
-          const year = new Date(r.date).getFullYear();
-          if (!byYear[year]) byYear[year] = 0;
-          byYear[year] += r.amount;
-        }
-        if (Object.keys(byYear).length > 0) {
-          fullHtml += `<div class="dividends-by-year">`;
-          const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
-          for (const year of sortedYears) {
-            const bruto = byYear[year];
-            fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
-          }
-          fullHtml += `</div>`;
-        }
-
-        // Botón detalle y selector de año (juntos)
-        fullHtml += `
-          <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
-            <button id="toggleDividendosDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
-              Ver detalle
-            </button>
-            <select id="filterYearDividendos" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
-              <option value="">Todos</option>
-        `;
-        const allYearsDiv = [...new Set(dividendsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
-        for (const year of allYearsDiv) {
-            fullHtml += `<option value="${year}">${year}</option>`;
-        }
-        fullHtml += `
-            </select>
-          </div>
-          <div id="DividendosDetail" style="display:none; margin-top:12px;">
-            <div id="filteredDetailDividendos"></div>
-          </div>
-        `;
-        fullHtml += `</div>`; // Cierre de Dividendos
-      }
-
-      // --- SECCIÓN DE INTERESES ---
-      if (interestsForDetail.length > 0) {
-        let totalBruto = interestsForDetail.reduce((sum, r) => sum + r.amount, 0);
-        fullHtml += `<div class="summary-card returns-section"><div class="group-title">Intereses</div>`;
-        fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
-
-        // Por año (siempre visible)
-        const byYear = {};
-        for (const r of interestsForDetail) {
-          const year = new Date(r.date).getFullYear();
-          if (!byYear[year]) byYear[year] = 0;
-          byYear[year] += r.amount;
-        }
-        if (Object.keys(byYear).length > 0) {
-          fullHtml += `<div class="dividends-by-year">`;
-          const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
-          for (const year of sortedYears) {
-            const bruto = byYear[year];
-            fullHtml += `<div class="dividend-line"><strong>${year}:</strong> <strong>${formatCurrency(bruto)}</strong></div>`;
-          }
-          fullHtml += `</div>`;
-        }
-
-        // Botón detalle y selector de año (juntos)
-        fullHtml += `
-          <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
-            <button id="toggleInteresesDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
-              Ver detalle
-            </button>
-            <select id="filterYearIntereses" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
-              <option value="">Todos</option>
-        `;
-        const allYearsInt = [...new Set(interestsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
-        for (const year of allYearsInt) {
-            fullHtml += `<option value="${year}">${year}</option>`;
-        }
-        fullHtml += `
-            </select>
-          </div>
-          <div id="InteresesDetail" style="display:none; margin-top:12px;">
-            <div id="filteredDetailIntereses"></div>
-          </div>
-        `;
-        fullHtml += `</div>`; // Cierre de Intereses
-      }
+    // Reemplazar coma por punto para parsear como número
+    currentBalanceStr = currentBalanceStr.replace(',', '.');
+    const currentBalance = parseFloat(currentBalanceStr);
+    if (isNaN(currentBalance)) {
+      showToast('Saldo inválido.');
+      return;
     }
-
-    // --- SECCIÓN DE CUENTAS (sin contenedor adicional) ---
-    fullHtml += `<div class="group-title">Cuentas</div>`; // Título de Cuentas
-    for (const acc of orderedAccountsForDetail) { // Iterar directamente sobre las cuentas
-      const holderLine = acc.holder2 ? `${acc.holder}<span style="font-size: 1rem;"> / ${acc.holder2}</span>` : acc.holder; // Titular 2 mismo tamaño
-      const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en el texto principal
-      // CORRECCIÓN: Borde completo si es cuenta de valores, sino lateral
-      const borderStyle = acc.isValueAccount && acc.color ? `border: 2px solid ${acc.color};` : (acc.color ? `border-left: 4px solid ${acc.color};` : '');
-      const isValueAccountClass = acc.isValueAccount ? ' value-account' : ''; // Clase para borde completo
-      const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
-      fullHtml += `
-        <div class="asset-item${isValueAccountClass}" style="${borderStyle}" data-id="${acc.id}" draggable="true">
-          <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
-          Titular: ${holderLine}<br>
-          Saldo: ${formatCurrency(acc.currentBalance)}<br>
-          ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
-        </div>
-      `;
+    const color = document.getElementById('color').value;
+    const note = document.getElementById('note').value.trim() || null;
+    if (!bank || !holder || !accountNumber) {
+      showToast('Completa todos los campos obligatorios.');
+      return;
     }
-
-    summaryContainer.innerHTML = fullHtml;
-
-    // --- LÓGICA DE DRAG & DROP ---
-    // El contenedor para drag & drop ahora será summaryContainer mismo o un contenedor específico para las tarjetas de cuenta
-    // Dado que las tarjetas son hijos directos de summaryContainer, necesitamos un selector más específico
-    // Podemos usar la clase 'asset-item' para identificar los elementos arrastrables
-    // Y asumiremos que solo las tarjetas de cuenta serán hijos directos de summaryContainer en este nivel
-    // Si hay otros elementos como 'summary-card', se puede usar un selector más complejo si es necesario.
-    // En este caso, asumiremos que 'summaryContainer' contiene solo las tarjetas de cuenta como hijos directos.
-    const list = summaryContainer; // Ahora summaryContainer es el contenedor de drag & drop
-
-    // ... (mantener el resto de la lógica de drag & drop, pero aplicarla a 'list' que ahora es summaryContainer) ...
-    if (list) {
-      // Asegurarse de que los listeners de drag no interfieran con otros elementos
-      // Filtrar para que solo se aplique a '.asset-item'
-      list.addEventListener('dragstart', e => {
-        if (e.target.classList.contains('asset-item')) {
-          e.target.classList.add('dragging');
-          e.dataTransfer.setData('text/plain', e.target.dataset.id);
-          e.dataTransfer.effectAllowed = 'move';
-        }
-      });
-      list.addEventListener('dragover', e => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        const draggingElement = document.querySelector('.dragging');
-        if (draggingElement) {
-          const afterElement = getDragAfterElement(list, e.clientY);
-          const currentDraggable = afterElement || list.lastElementChild;
-          if (currentDraggable && currentDraggable !== draggingElement) {
-            list.insertBefore(draggingElement, currentDraggable);
-          } else if (currentDraggable === draggingElement) {
-             // Si el elemento ya está en la posición correcta, no hacer nada
-             return;
-          } else {
-             // Si no hay un elemento después y el último no es el que se arrastra, moverlo al final
-             if (list.lastElementChild !== draggingElement) {
-                 list.appendChild(draggingElement);
-             }
-          }
-        }
-      });
-      list.addEventListener('dragenter', e => {
-        e.preventDefault(); // Prevenir el comportamiento por defecto
-      });
-      list.addEventListener('drop', e => {
-        e.preventDefault();
-        const dragging = document.querySelector('.dragging');
-        if (dragging) {
-          dragging.classList.remove('dragging');
-          const ids = Array.from(list.children)
-                           .filter(child => child.classList.contains('asset-item')) // Filtrar solo tarjetas de cuenta
-                           .map(el => parseInt(el.dataset.id));
-          saveCustomOrder(ids);
-        }
-      });
-      list.addEventListener('dragend', e => {
-        const draggingElement = e.target;
-        if (draggingElement.classList.contains('dragging')) {
-          draggingElement.classList.remove('dragging');
-        }
-      });
-    }
-
-    // Función auxiliar para determinar la posición de drop
-    function getDragAfterElement(container, y) {
-        const draggableElements = [...container.querySelectorAll('.asset-item:not(.dragging)')];
-
-        return draggableElements.reduce((closest, child) => {
-            const box = child.getBoundingClientRect();
-            const offset = y - box.top - box.height / 2;
-            // Si el offset es menor que 0, significa que el cursor está antes del centro del elemento
-            // y el elemento actual es el que debe estar después del que se arrastra
-            if (offset < 0 && offset > closest.offset) {
-                return { offset: offset, element: child };
-            } else {
-                return closest;
-            }
-        }, { offset: Number.NEGATIVE_INFINITY }).element;
-    }
-
-
-    // --- LÓGICA DE COPIAR AL PORTAPAPELES ---
-    document.querySelectorAll('.btn-copy').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const number = e.target.dataset.number;
-        if (number) {
-          navigator.clipboard.writeText(number).then(() => {
-            showToast('✅ Nº de cuenta copiado.');
-          }).catch(err => {
-            console.error('Error al copiar:', err);
-            showToast('❌ Error al copiar.');
-          });
-        }
-      });
-    });
-
-    // --- TOGGLES DETALLE Y FILTRO ---
-    const toggleDivBtn = document.getElementById('toggleDividendosDetail');
-    if (toggleDivBtn) {
-      toggleDivBtn.onclick = function() {
-        const detail = document.getElementById('DividendosDetail');
-        const isVisible = detail.style.display === 'block';
-        detail.style.display = isVisible ? 'none' : 'block';
-        this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
-        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
-            const yearSelect = document.getElementById('filterYearDividendos');
-            if (yearSelect) {
-                // Asegurarse de que los listeners estén registrados antes de llamar a la función
-                if (!yearSelect.hasAttribute('data-listeners-set')) {
-                    yearSelect.setAttribute('data-listeners-set', 'true');
-                    yearSelect.onchange = () => updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
-                }
-                updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
-            }
-        }
-      };
-    }
-
-    const toggleIntBtn = document.getElementById('toggleInteresesDetail');
-    if (toggleIntBtn) {
-      toggleIntBtn.onclick = function() {
-        const detail = document.getElementById('InteresesDetail');
-        const isVisible = detail.style.display === 'block';
-        detail.style.display = isVisible ? 'none' : 'block';
-        this.textContent = isVisible ? 'Ver detalle' : 'Ocultar detalle';
-        if (!isVisible) { // Si se está mostrando, cargar el detalle filtrado por año
-            const yearSelect = document.getElementById('filterYearIntereses');
-            if (yearSelect) {
-                // Asegurarse de que los listeners estén registrados antes de llamar a la función
-                if (!yearSelect.hasAttribute('data-listeners-set')) {
-                    yearSelect.setAttribute('data-listeners-set', 'true');
-                    yearSelect.onchange = () => updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
-                }
-                updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
-            }
-        }
-      };
-    }
-
-    // Lógica de filtro por año (ahora solo se registra si no existe listener)
-    // Los listeners se registran dinámicamente en los botones de toggle, solo si no existen
-    // por lo tanto, estas líneas se pueden eliminar si se implementa el código anterior
-    // ya que los listeners se manejan en los toggle.
-    // Se deja el código original comentado para referencia:
-    /*
-    const yearSelectDiv = document.getElementById('filterYearDividendos');
-    if (yearSelectDiv) {
-        yearSelectDiv.onchange = () => updateDetailByYear('Dividendos', 'filterYearDividendos', 'filteredDetailDividendos');
-    }
-    const yearSelectInt = document.getElementById('filterYearIntereses');
-    if (yearSelectInt) {
-        yearSelectInt.onchange = () => updateDetailByYear('Intereses', 'filterYearIntereses', 'filteredDetailIntereses');
-    }
-    */
-
-
-  } catch (err) {
-    console.error('Error en renderAccountsSummary:', err);
-    summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
-    if (summaryContainer) summaryContainer.innerHTML = '';
-  }
-}
-
-// --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
-function updateDetailByYear(title, selectId, detailId) {
-    const yearSelect = document.getElementById(selectId);
-    const detailDiv = document.getElementById(detailId);
-    if (!yearSelect || !detailDiv) return;
-
-    const selectedYear = yearSelect.value;
-    // Usar las variables globales aquí
-    const allReturns = title === 'Dividendos' ? dividendsForDetail : interestsForDetail;
-    // Usar la variable global aquí
-    const accounts = orderedAccountsForDetail;
-    const accountMap = {};
-    accounts.forEach(a => accountMap[a.id] = a);
-
-    let html = '';
-    const filteredReturns = selectedYear ? allReturns.filter(r => new Date(r.date).getFullYear().toString() === selectedYear) : allReturns;
-    const byAccount = {};
-    for (const r of filteredReturns) {
-      if (!byAccount[r.accountId]) byAccount[r.accountId] = 0;
-      byAccount[r.accountId] += r.amount;
-    }
-    for (const accId in byAccount) {
-      const acc = accountMap[accId];
-      if (!acc) continue;
-      const displayName = acc.bank + (acc.description ? ` (${acc.description})` : '');
-      const amount = byAccount[accId];
-      // CORRECCIÓN: Detalle de cuentas sin negrita (quitar <strong>)
-      html += `<div class="dividend-line">${displayName}: ${formatCurrency(amount)}</div>`;
-    }
-    detailDiv.innerHTML = html;
-}
-
-
-// --- INICIO ---
-document.addEventListener('DOMContentLoaded', () => {
-  db.open().catch(err => {
-    console.error('IndexedDB error:', err);
-    const el = document.getElementById('summary-totals');
-    if (el) el.innerHTML = '<p style="color:red">Error de base de datos.</p>';
-  }).then(() => {
+    await db.accounts.add({ bank, description, accountNumber, isValueAccount, holder, holder2, currentBalance, color, note });
+    document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
-  });
-  // initTheme(); // Se llama en Parte 3
-  // initMenu();  // Se llama en Parte 3
-});
+  };
+}
+
+// --- FUNCIÓN ACTUALIZADA ---
+async function openEditAccountForm(acc) {
+  // Obtener entidades existentes para datalist
+  const allAccounts = await db.accounts.toArray();
+  const banks = [...new Set(allAccounts.map(a => a.bank))];
+  const bankOptions = banks.map(b => `<option value="${b}">`).join('');
+
+  // Obtener titulares existentes para datalist (común)
+  const holders = [...new Set([
+    ...allAccounts.map(a => a.holder),
+    ...allAccounts.map(a => a.holder2).filter(h => h)
+  ])];
+  const holderOptions = holders.map(h => `<option value="${h}">`).join('');
+
+  // Mostrar el saldo actual sin formato específico en el input
+  const form = `
+    <div class="form-group">
+      <label>Entidad:</label>
+      <input type="text" id="bank" list="banks" value="${acc.bank}" required />
+      <datalist id="banks">${bankOptions}</datalist>
+    </div>
+    <div class="form-group">
+      <label>Descripción:</label>
+      <input type="text" id="description" value="${acc.description || ''}" />
+    </div>
+    <div class="form-group">
+      <label>Cuenta de Valores</label>
+      <label id="isValueAccountLabel" class="value-account-toggle" style="display: inline-block; padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; user-select: none; background-color: #f0f0f0; color: #333;">
+        <input type="checkbox" id="isValueAccount" ${acc.isValueAccount ? 'checked' : ''} style="display: none;">
+        <span>🏷️ ${acc.isValueAccount ? 'Sí' : 'No'}</span>
+      </label>
+    </div>
+    <div class="form-group">
+      <label>Nº de Cuenta (IBAN):</label>
+      <input type="text" id="accountNumber" value="${acc.accountNumber || ''}" required />
+    </div>
+    <div class="form-group">
+      <label>Titular principal:</label>
+      <input type="text" id="holder" value="${acc.holder}" required />
+      <datalist id="holders">${holderOptions}</datalist>
+    </div>
+    <div class="form-group">
+      <label>Segundo titular:</label>
+      <input type="text" id="holder2" value="${acc.holder2 || ''}" />
+      <datalist id="holders">${holderOptions}</datalist>
+    </div>
+    <div class="form-group">
+      <label>Saldo actual (€):</label>
+      <input type="text" id="currentBalance" value="${acc.currentBalance}" required />
+    </div>
+    <div class="form-group">
+      <label>Color de tarjeta:</label>
+      <input type="color" id="color" value="${acc.color || '#1a73e8'}" list="colorPalette">
+      <datalist id="colorPalette">
+        <option value="#091891"></option> <!-- BBVA -->
+        <option value="#fb6405"></option> <!-- ING -->
+        <option value="#04ac94"></option> <!-- N26 -->
+        <option value="#eb0404"></option> <!-- Santander -->
+        <option value="#21da60"></option> <!-- Trade Republic -->
+        <option value="#1496d2"></option> <!-- Revolut -->
+        <option value="#b3dded"></option> <!-- azul grisáceo -->
+        <option value="#f8f49c"></option> <!-- Amarillo -->
+      </datalist>
+    </div>
+    <div class="form-group">
+      <label>Nota:</label>
+      <input type="text" id="note" value="${acc.note || ''}" />
+    </div>
+    <button id="btnUpdateAccount" class="btn-primary">Guardar Cambios</button>
+  `;
+  openModal('Editar Cuenta', form);
+
+  // Aplicar color al borde de la tarjeta del modal
+  const modalContent = document.querySelector('#modalOverlay .modal-content');
+  if (modalContent && acc.color) {
+    modalContent.style.borderLeft = `4px solid ${acc.color}`;
+  }
+
+  // Lógica para el toggle de "Cuenta de Valores"
+  const toggleLabel = document.getElementById('isValueAccountLabel');
+  const checkbox = document.getElementById('isValueAccount');
+  toggleLabel.onclick = () => {
+    checkbox.checked = !checkbox.checked;
+    toggleLabel.querySelector('span').textContent = checkbox.checked ? '🏷️ Sí' : '🏷️ No';
+    // Actualizar placeholder del número de cuenta
+    const accountNumberInput = document.getElementById('accountNumber');
+    if (checkbox.checked) {
+      accountNumberInput.placeholder = "Ej: DE000A12B3C4";
+    } else {
+      accountNumberInput.placeholder = "Ej: ES12 1234 5678 9012 3456 7890";
+    }
+  };
+
+  // NO se aplica formateo automático en el input de saldo de edición
+  // const balanceInput = document.getElementById('currentBalance');
+  // let lastValue = balanceInput.value;
+  // balanceInput.addEventListener('input', (e) => { ... }); // Eliminado
+
+  document.getElementById('btnUpdateAccount').onclick = async () => {
+    const bank = document.getElementById('bank').value.trim();
+    const description = document.getElementById('description').value.trim();
+    const accountNumber = document.getElementById('accountNumber').value.trim();
+    const isValueAccount = checkbox.checked; // Usar el checkbox
+    const holder = document.getElementById('holder').value.trim();
+    const holder2 = document.getElementById('holder2').value.trim() || null;
+    let currentBalanceStr = document.getElementById('currentBalance').value.trim(); // Obtener el valor como string
+    if (currentBalanceStr === '') {
+      showToast('El saldo no puede estar vacío.');
+      return;
+    }
+    // Validar y convertir el saldo
+    // Permitir solo números, comas y puntos
+    if (!/^\d*[\.,]?\d*$/.test(currentBalanceStr)) {
+      showToast('Formato de saldo inválido. Usa solo números y coma (,) o punto (.) para decimales.');
+      return;
+    }
+    // Reemplazar coma por punto para parsear como número
+    currentBalanceStr = currentBalanceStr.replace(',', '.');
+    const currentBalance = parseFloat(currentBalanceStr);
+    if (isNaN(currentBalance)) {
+      showToast('Saldo inválido.');
+      return;
+    }
+    const color = document.getElementById('color').value;
+    const note = document.getElementById('note').value.trim() || null;
+    if (!bank || !holder || !accountNumber) {
+      showToast('Completa todos los campos obligatorios.');
+      return;
+    }
+    await db.accounts.update(acc.id, { bank, description, accountNumber, isValueAccount, holder, holder2, currentBalance, color, note });
+    document.getElementById('modalOverlay').style.display = 'none';
+    renderAccountsSummary();
+  };
+                                           }
 // --- FORMULARIOS DE RENDIMIENTOS ---
 // --- FUNCIÓN RECUPERADA Y ACTUALIZADA ---
 async function showAddReturnForm() {
