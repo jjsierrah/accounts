@@ -606,25 +606,29 @@ async function showAddAccountForm() {
     }
   };
 
-  // Lógica para el input de saldo (sin formateo visual)
+  // Lógica para el input de saldo con formato numérico (punto para miles, coma para decimales)
   const balanceInput = document.getElementById('currentBalance');
+  let lastValue = balanceInput.value;
   balanceInput.addEventListener('input', (e) => {
+    let value = e.target.value;
     // Permitir solo números, comas y puntos
-    let value = e.target.value.replace(/[^\d,.]/g, '');
+    value = value.replace(/[^\d,.]/g, '');
     // Si tiene más de una coma, dejar solo la primera
     const parts = value.split(',');
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    // Formatear visualmente (opcional, pero no cambiar el valor real)
+    // Formatear visualmente (punto para miles, coma para decimales)
     const [integer, decimal] = value.split(',');
     if (integer) {
       const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
       value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
     }
-    // No cambiamos el valor del input, solo lo mostramos formateado
-    // El cálculo se hará con parseFloat(value.replace('.', '').replace(',', '.'))
-    e.target.value = value;
+    // Solo mostramos el valor formateado, no lo cambiamos internamente
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
   });
 
   document.getElementById('btnSaveAccount').onclick = async () => {
@@ -634,7 +638,7 @@ async function showAddAccountForm() {
     const isValueAccount = checkbox.checked; // Usar el checkbox
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
-    let currentBalanceStr = balanceInput.value.trim();
+    let currentBalanceStr = balanceInput.value.trim(); // Usar el input formateado
     if (currentBalanceStr === '') {
       showToast('El saldo no puede estar vacío.');
       return;
@@ -672,7 +676,7 @@ async function openEditAccountForm(acc) {
   ])];
   const holderOptions = holders.map(h => `<option value="${h}">`).join('');
 
-  // Formatear saldo para mostrarlo en el input
+  // Formatear saldo para mostrarlo en el input con formato numérico
   const formattedBalance = formatNumber(acc.currentBalance);
 
   const form = `
@@ -755,24 +759,29 @@ async function openEditAccountForm(acc) {
     }
   };
 
-  // Lógica para el input de saldo (sin formateo visual)
+  // Lógica para el input de saldo con formato numérico (punto para miles, coma para decimales)
   const balanceInput = document.getElementById('currentBalance');
+  let lastValue = balanceInput.value;
   balanceInput.addEventListener('input', (e) => {
+    let value = e.target.value;
     // Permitir solo números, comas y puntos
-    let value = e.target.value.replace(/[^\d,.]/g, '');
+    value = value.replace(/[^\d,.]/g, '');
     // Si tiene más de una coma, dejar solo la primera
     const parts = value.split(',');
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    // Formatear visualmente (opcional, pero no cambiar el valor real)
+    // Formatear visualmente (punto para miles, coma para decimales)
     const [integer, decimal] = value.split(',');
     if (integer) {
       const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
       value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
     }
-    // No cambiamos el valor del input, solo lo mostramos formateado
-    e.target.value = value;
+    // Solo mostramos el valor formateado, no lo cambiamos internamente
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
   });
 
   document.getElementById('btnUpdateAccount').onclick = async () => {
@@ -782,7 +791,7 @@ async function openEditAccountForm(acc) {
     const isValueAccount = checkbox.checked; // Usar el checkbox
     const holder = document.getElementById('holder').value.trim();
     const holder2 = document.getElementById('holder2').value.trim() || null;
-    let currentBalanceStr = balanceInput.value.trim();
+    let currentBalanceStr = balanceInput.value.trim(); // Usar el input formateado
     if (currentBalanceStr === '') {
       showToast('El saldo no puede estar vacío.');
       return;
@@ -845,28 +854,33 @@ async function showAddReturnForm() {
   `;
   openModal('Añadir Rendimiento', form);
 
-  // Lógica para el input de importe (sin formateo visual)
+  // Lógica para el input de importe con formato numérico (punto para miles, coma para decimales)
   const amountInput = document.getElementById('returnAmount');
+  let lastValue = amountInput.value;
   amountInput.addEventListener('input', (e) => {
+    let value = e.target.value;
     // Permitir solo números, comas y puntos
-    let value = e.target.value.replace(/[^\d,.]/g, '');
+    value = value.replace(/[^\d,.]/g, '');
     // Si tiene más de una coma, dejar solo la primera
     const parts = value.split(',');
     if (parts.length > 2) {
       value = parts[0] + ',' + parts.slice(1).join('');
     }
-    // Formatear visualmente (opcional, pero no cambiar el valor real)
+    // Formatear visualmente (punto para miles, coma para decimales)
     const [integer, decimal] = value.split(',');
     if (integer) {
       const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
       value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
     }
-    // No cambiamos el valor del input, solo lo mostramos formateado
-    e.target.value = value;
+    // Solo mostramos el valor formateado, no lo cambiamos internamente
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
   });
 
   document.getElementById('btnSaveReturn').onclick = async () => {
-    let amountStr = amountInput.value.trim();
+    let amountStr = amountInput.value.trim(); // Usar el input formateado
     if (amountStr === '') {
       showToast('El importe no puede estar vacío.');
       return;
@@ -939,7 +953,7 @@ async function showReturnsList() {
         const display = a.bank + (a.description ? ` (${a.description})` : '');
         return `<option value="${a.id}" ${a.id === ret.accountId ? 'selected' : ''}>${display}</option>`;
       }).join('');
-      // Formatear importe para mostrarlo en el input
+      // Formatear importe para mostrarlo en el input con formato numérico
       const formattedAmount = formatNumber(ret.amount);
 
       const form = `
@@ -970,28 +984,33 @@ async function showReturnsList() {
       `;
       openModal('Editar Rendimiento', form);
 
-      // Lógica para el input de importe con formato en edición
+      // Lógica para el input de importe con formato en edición (punto para miles, coma para decimales)
       const editAmountInput = document.getElementById('editReturnAmount');
+      let lastEditValue = editAmountInput.value;
       editAmountInput.addEventListener('input', (e) => {
+        let value = e.target.value;
         // Permitir solo números, comas y puntos
-        let value = e.target.value.replace(/[^\d,.]/g, '');
+        value = value.replace(/[^\d,.]/g, '');
         // Si tiene más de una coma, dejar solo la primera
         const parts = value.split(',');
         if (parts.length > 2) {
           value = parts[0] + ',' + parts.slice(1).join('');
         }
-        // Formatear visualmente (opcional, pero no cambiar el valor real)
+        // Formatear visualmente (punto para miles, coma para decimales)
         const [integer, decimal] = value.split(',');
         if (integer) {
           const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
           value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
         }
-        // No cambiamos el valor del input, solo lo mostramos formateado
-        e.target.value = value;
+        // Solo mostramos el valor formateado, no lo cambiamos internamente
+        if (value !== e.target.value) {
+          e.target.value = value;
+        }
+        lastEditValue = value;
       });
 
       document.getElementById('btnUpdateReturn').onclick = async () => {
-        let amountStr = editAmountInput.value.trim();
+        let amountStr = editAmountInput.value.trim(); // Usar el input formateado
         if (amountStr === '') {
           showToast('El importe no puede estar vacío.');
           return;
