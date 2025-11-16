@@ -226,7 +226,7 @@ async function renderAccountsSummary() {
 
     // Cargar orden personalizado
     const customOrder = loadCustomOrder();
-    orderedAccountsForDetail = [...accounts].sort((a, b) => {
+    const orderedAccounts = [...accounts].sort((a, b) => {
       const aIndex = customOrder.indexOf(a.id);
       const bIndex = customOrder.indexOf(b.id);
       if (aIndex === -1 && bIndex === -1) return 0;
@@ -256,23 +256,21 @@ async function renderAccountsSummary() {
     `;
 
     const returns = await db.returns.toArray();
-
-    // Asignar las variables globales para el detalle
-    dividendsForDetail = returns.filter(r => r.returnType === 'dividend');
-    interestsForDetail = returns.filter(r => r.returnType === 'interest');
-
     let fullHtml = '';
 
     if (returns.length > 0) {
+      const dividends = returns.filter(r => r.returnType === 'dividend');
+      const interests = returns.filter(r => r.returnType === 'interest');
+
       // --- SECCIÓN DE DIVIDENDOS ---
-      if (dividendsForDetail.length > 0) {
-        let totalBruto = dividendsForDetail.reduce((sum, r) => sum + r.amount, 0);
+      if (dividends.length > 0) {
+        let totalBruto = dividends.reduce((sum, r) => sum + r.amount, 0);
         fullHtml += `<div class="summary-card returns-section"><div class="group-title">Dividendos</div>`;
         fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
         // Por año (siempre visible)
         const byYear = {};
-        for (const r of dividendsForDetail) {
+        for (const r of dividends) {
           const year = new Date(r.date).getFullYear();
           if (!byYear[year]) byYear[year] = 0;
           byYear[year] += r.amount;
@@ -293,10 +291,10 @@ async function renderAccountsSummary() {
             <button id="toggleDividendosDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
               Ver detalle
             </button>
-            <select id="filterYearDividendos" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
+            <select id="filterYearDividendos" class="year-filter btn-primary" style="padding: 10px; font-size: 0.95rem; border: none; border-radius: 10px; background: #1a73e8; color: white; cursor: pointer; width: auto; min-height: 48px; height: 100%;">
               <option value="">Todos</option>
         `;
-        const allYearsDiv = [...new Set(dividendsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        const allYearsDiv = [...new Set(dividends.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
         for (const year of allYearsDiv) {
             fullHtml += `<option value="${year}">${year}</option>`;
         }
@@ -311,14 +309,14 @@ async function renderAccountsSummary() {
       }
 
       // --- SECCIÓN DE INTERESES ---
-      if (interestsForDetail.length > 0) {
-        let totalBruto = interestsForDetail.reduce((sum, r) => sum + r.amount, 0);
+      if (interests.length > 0) {
+        let totalBruto = interests.reduce((sum, r) => sum + r.amount, 0);
         fullHtml += `<div class="summary-card returns-section"><div class="group-title">Intereses</div>`;
         fullHtml += `<div class="dividend-line"><strong>Total:</strong> <strong>${formatCurrency(totalBruto)}</strong></div>`;
 
         // Por año (siempre visible)
         const byYear = {};
-        for (const r of interestsForDetail) {
+        for (const r of interests) {
           const year = new Date(r.date).getFullYear();
           if (!byYear[year]) byYear[year] = 0;
           byYear[year] += r.amount;
@@ -339,10 +337,10 @@ async function renderAccountsSummary() {
             <button id="toggleInteresesDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
               Ver detalle
             </button>
-            <select id="filterYearIntereses" class="year-filter" style="padding: 6px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
+            <select id="filterYearIntereses" class="year-filter btn-primary" style="padding: 10px; font-size: 0.95rem; border: none; border-radius: 10px; background: #1a73e8; color: white; cursor: pointer; width: auto; min-height: 48px; height: 100%;">
               <option value="">Todos</option>
         `;
-        const allYearsInt = [...new Set(interestsForDetail.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+        const allYearsInt = [...new Set(interests.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
         for (const year of allYearsInt) {
             fullHtml += `<option value="${year}">${year}</option>`;
         }
@@ -357,9 +355,9 @@ async function renderAccountsSummary() {
       }
     }
 
-    // --- SECCIÓN DE CUENTAS (sin contenedor adicional) ---
+    // --- SECCIÓN DE CUENTAS ---
     fullHtml += `<div class="group-title">Cuentas</div>`; // Título de Cuentas
-    for (const acc of orderedAccountsForDetail) { // Iterar directamente sobre las cuentas
+    for (const acc of orderedAccounts) { // Iterar directamente sobre las cuentas
       const holderLine = acc.holder2 ? `${acc.holder}<span style="font-size: 1rem;"> / ${acc.holder2}</span>` : acc.holder; // Titular 2 mismo tamaño
       const colorStyle = acc.color ? `color: ${acc.color};` : ''; // Color en el texto principal
       // CORRECCIÓN: Borde completo si es cuenta de valores, sino lateral
@@ -369,7 +367,7 @@ async function renderAccountsSummary() {
       fullHtml += `
         <div class="asset-item${isValueAccountClass}" style="${borderStyle}" data-id="${acc.id}" draggable="true">
           <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;"></button><br>` : ''}
+          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
           Titular: ${holderLine}<br>
           Saldo: ${formatCurrency(acc.currentBalance)}<br>
           ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
@@ -465,10 +463,10 @@ async function renderAccountsSummary() {
         const number = e.target.dataset.number;
         if (number) {
           navigator.clipboard.writeText(number).then(() => {
-            showToast(' Nº de cuenta copiado.');
+            showToast('✅ Nº de cuenta copiado.');
           }).catch(err => {
             console.error('Error al copiar:', err);
-            showToast(' Error al copiar.');
+            showToast('❌ Error al copiar.');
           });
         }
       });
@@ -784,7 +782,7 @@ async function openEditAccountForm(acc) {
       <label>Color de tarjeta:</label>
       <input type="color" id="color" value="${acc.color || '#1a73e8'}" list="colorPalette">
       <datalist id="colorPalette">
-        <option value="#091891"></option> <!-- BBVA -->
+        <option value="#04128c"></option> <!-- BBVA -->
         <option value="#fb6405"></option> <!-- ING -->
         <option value="#04ac94"></option> <!-- N26 -->
         <option value="#eb0404"></option> <!-- Santander -->
