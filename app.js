@@ -291,7 +291,24 @@ async function renderAccountsSummary() {
             <button id="toggleDividendosDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
               Ver detalle
             </button>
-            <select id="filterYearDividendos" class="year-filter btn-primary" style="padding: 10px; font-size: 0.95rem; border: none; border-radius: 10px; background: #1a73e8; color: white; cursor: pointer; width: auto; min-height: 48px; height: 100%;">
+            <select id="filterYearDividendos" class="year-filter btn-primary" style="
+              padding: 10px; 
+              font-size: 0.95rem; 
+              border: none; 
+              border-radius: 10px; 
+              background: #1a73e8; 
+              color: white; 
+              cursor: pointer; 
+              width: auto; 
+              min-height: 48px; 
+              height: 100%;
+              appearance: none; /* Oculta la apariencia nativa */
+              background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="5" viewBox="0 0 10 5" fill="white"><path d="M0 0L5 5L10 0H0Z"/></svg>'); /* Flecha blanca */
+              background-repeat: no-repeat;
+              background-position: right 10px center;
+              background-size: 10px 5px;
+              padding-right: 30px; /* Espacio para la flecha */
+            ">
               <option value="">Todos</option>
         `;
         const allYearsDiv = [...new Set(dividends.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
@@ -337,7 +354,24 @@ async function renderAccountsSummary() {
             <button id="toggleInteresesDetail" class="btn-primary" style="padding:10px; font-size:0.95rem; width:auto;">
               Ver detalle
             </button>
-            <select id="filterYearIntereses" class="year-filter btn-primary" style="padding: 10px; font-size: 0.95rem; border: none; border-radius: 10px; background: #1a73e8; color: white; cursor: pointer; width: auto; min-height: 48px; height: 100%;">
+            <select id="filterYearIntereses" class="year-filter btn-primary" style="
+              padding: 10px; 
+              font-size: 0.95rem; 
+              border: none; 
+              border-radius: 10px; 
+              background: #1a73e8; 
+              color: white; 
+              cursor: pointer; 
+              width: auto; 
+              min-height: 48px; 
+              height: 100%;
+              appearance: none; /* Oculta la apariencia nativa */
+              background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="5" viewBox="0 0 10 5" fill="white"><path d="M0 0L5 5L10 0H0Z"/></svg>'); /* Flecha blanca */
+              background-repeat: no-repeat;
+              background-position: right 10px center;
+              background-size: 10px 5px;
+              padding-right: 30px; /* Espacio para la flecha */
+            ">
               <option value="">Todos</option>
         `;
         const allYearsInt = [...new Set(interests.map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
