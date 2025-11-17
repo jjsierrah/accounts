@@ -635,7 +635,8 @@ async function renderAccountsSummary() {
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
-                                                               }
+              }
+
 // --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
 function updateDetailByYear(title, selectId, detailId) {
     const yearSelect = document.getElementById(selectId);
@@ -1162,6 +1163,60 @@ async function showReturnsList() {
     }
   };
 }
+
+// --- FUNCIÓN PARA RENDIMIENTO GLOBAL ---
+async function showGlobalReturns() {
+  const returns = await db.returns.toArray();
+  if (returns.length === 0) {
+    openModal('Rendimiento Global', '<p>No hay rendimientos registrados.</p>');
+    return;
+  }
+
+  // Calcular totales generales
+  const totalDividends = returns.filter(r => r.returnType === 'dividend').reduce((sum, r) => sum + r.amount, 0);
+  const totalInterests = returns.filter(r => r.returnType === 'interest').reduce((sum, r) => sum + r.amount, 0);
+  const totalReturns = totalDividends + totalInterests;
+
+  // Agrupar por año
+  const byYear = {};
+  for (const r of returns) {
+    const year = new Date(r.date).getFullYear();
+    if (!byYear[year]) byYear[year] = { dividend: 0, interest: 0 };
+    if (r.returnType === 'dividend') {
+      byYear[year].dividend += r.amount;
+    } else {
+      byYear[year].interest += r.amount;
+    }
+  }
+
+  let html = '<h3>Rendimiento Global</h3>';
+  html += `<div class="summary-card">
+              <div class="dividend-line"><strong>Total Dividendos:</strong> <strong>${formatCurrency(totalDividends)}</strong></div>
+              <div class="dividend-line"><strong>Total Intereses:</strong> <strong>${formatCurrency(totalInterests)}</strong></div>
+              <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
+              <div class="dividend-line"><strong>Total Rendimiento:</strong> <strong>${formatCurrency(totalReturns)}</strong></div>
+            </div>`;
+
+  // Detalle por año
+  html += `<div class="group-title">Por Año</div>`;
+  const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
+  for (const year of sortedYears) {
+    const yearData = byYear[year];
+    html += `<div class="summary-card">
+              <div class="dividend-line"><strong>${year}:</strong></div>
+              <div class="dividend-line">Dividendos: <strong>${formatCurrency(yearData.dividend)}</strong></div>
+              <div class="dividend-line">Intereses: <strong>${formatCurrency(yearData.interest)}</strong></div>
+              <div class="dividend-line"><strong>Total: ${formatCurrency(yearData.dividend + yearData.interest)}</strong></div>
+             </div>`;
+  }
+
+  // Aquí es donde iría la lógica para el gráfico y la proporción si se implementa más adelante
+  // Por ahora, solo mostramos la información básica
+  html += `<p class="modal-note">Aquí se mostrará la evolución gráfica y la proporción en futuras actualizaciones.</p>`;
+
+  openModal('Rendimiento Global', html);
+}
+
 // --- TEMA ---
 function getCurrentTheme() {
   return localStorage.getItem('theme') || 'light';
@@ -1199,6 +1254,7 @@ function initMenu() {
           <li><button data-action="view-accounts"><span>🏦 Cuentas</span></button></li>
           <li><button data-action="add-return"><span>💰 Añadir Rendimiento</span></button></li>
           <li><button data-action="view-returns"><span>📊 Rendimientos</span></button></li>
+          <li><button data-action="view-global-returns"><span>📈 Rendimiento global</span></button></li> <!-- NUEVO -->
           <li><button data-action="import-export"><span>📤 Exportar / Importar</span></button></li>
           <li><button data-action="theme-toggle"><span>${themeLabel}</span></button></li>
           <li><button data-action="help"><span>ℹ️ Ayuda</span></button></li>
@@ -1216,6 +1272,7 @@ function initMenu() {
         else if (a === 'view-accounts') showAccountList();
         else if (a === 'add-return') showAddReturnForm();
         else if (a === 'view-returns') showReturnsList();
+        else if (a === 'view-global-returns') showGlobalReturns(); // NUEVO
         else if (a === 'import-export') showImportExport();
         else if (a === 'theme-toggle') {
           const newTheme = getCurrentTheme() === 'light' ? 'dark' : 'light';
@@ -1305,6 +1362,7 @@ function showHelp() {
       <li>📊 Dividendos mostrados en bruto</li>
       <li>📊 Separación de saldos: Cuentas y Valores</li>
       <li>🔄 Sin movimientos: solo rendimientos con fecha</li>
+      <li>📈 Visualización de rendimiento global</li>
       <li>📤 Exportar a JSON</li>
       <li>🌙 Tema claro/oscuro</li>
     </ul>
