@@ -587,3 +587,14 @@ h2 {
 .asset-item.value-account {
   border: 2px solid;
 }
+/* Para Chrome, Safari, Edge */
+.select-button-wrapper select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* Para Firefox (necesita un truco adicional) */
+.select-button-wrapper select::-ms-expand {
+  display: none;
+}
