@@ -210,6 +210,11 @@ async function showAccountList() {
     }
   };
 }
+// Variables globales para el detalle de rendimientos
+let orderedAccountsForDetail = [];
+let dividendsForDetail = [];
+let interestsForDetail = [];
+
 // --- RENDER RESUMEN ---
 async function renderAccountsSummary() {
   const summaryTotals = document.getElementById('summary-totals');
@@ -316,6 +321,12 @@ async function renderAccountsSummary() {
                 transition: background 0.2s;
                 /* Ajuste para que el texto no se corte */
                 padding-right: 30px; /* Espacio para la flecha */
+                /* Ocultar flecha nativa */
+                -webkit-appearance: none;
+                -moz-appearance: none;
+                appearance: none;
+                /* Para Firefox */
+                -ms-appearance: none;
               ">
                 <option value="">Todos</option>
         `;
@@ -396,6 +407,12 @@ async function renderAccountsSummary() {
                 transition: background 0.2s;
                 /* Ajuste para que el texto no se corte */
                 padding-right: 30px; /* Espacio para la flecha */
+                /* Ocultar flecha nativa */
+                -webkit-appearance: none;
+                -moz-appearance: none;
+                appearance: none;
+                /* Para Firefox */
+                -ms-appearance: none;
               ">
                 <option value="">Todos</option>
         `;
@@ -605,7 +622,6 @@ async function renderAccountsSummary() {
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
 }
-
 // --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
 function updateDetailByYear(title, selectId, detailId) {
     const yearSelect = document.getElementById(selectId);
