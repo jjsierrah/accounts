@@ -457,7 +457,7 @@ async function renderAccountsSummary() {
       fullHtml += `
         <div class="asset-item${isValueAccountClass}" style="${borderStyle}" data-id="${acc.id}" draggable="true">
           <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
+          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;"></button><br>` : ''}
           Titular: ${holderLine}<br>
           Saldo: ${formatCurrency(acc.currentBalance)}<br>
           ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
@@ -547,10 +547,10 @@ async function renderAccountsSummary() {
         const number = e.target.dataset.number;
         if (number) {
           navigator.clipboard.writeText(number).then(() => {
-            showToast('✅ Nº de cuenta copiado.');
+            showToast(' Nº de cuenta copiado.');
           }).catch(err => {
             console.error('Error al copiar:', err);
-            showToast('❌ Error al copiar.');
+            showToast(' Error al copiar.');
           });
         }
       });
@@ -621,7 +621,8 @@ async function renderAccountsSummary() {
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
-}
+      }
+
 // --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
 function updateDetailByYear(title, selectId, detailId) {
     const yearSelect = document.getElementById(selectId);
@@ -668,6 +669,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // initTheme(); // Se llama en Parte 3
   // initMenu();  // Se llama en Parte 3
 });
+
 // --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
@@ -721,7 +723,7 @@ async function showAddAccountForm() {
       <label>Color de tarjeta:</label>
       <input type="color" id="color" value="#1a73e8" list="colorPalette">
       <datalist id="colorPalette">
-        <option value="#04128C"></option> <!-- BBVA -->
+        <option value="#0100e0"></option> <!-- BBVA -->
         <option value="#fb6405"></option> <!-- ING -->
         <option value="#04ac94"></option> <!-- N26 -->
         <option value="#eb0404"></option> <!-- Santander -->
@@ -810,7 +812,9 @@ async function openEditAccountForm(acc) {
   ])];
   const holderOptions = holders.map(h => `<option value="${h}">`).join('');
 
-  // Mostrar el saldo actual sin formato especial en el input
+  // Formatear saldo para mostrarlo en el input con formato numérico (coma decimal, punto miles)
+  const formattedBalance = formatNumber(acc.currentBalance);
+
   const form = `
     <div class="form-group">
       <label>Entidad:</label>
@@ -844,13 +848,13 @@ async function openEditAccountForm(acc) {
     </div>
     <div class="form-group">
       <label>Saldo actual (€):</label>
-      <input type="text" id="currentBalance" value="${acc.currentBalance}" required />
+      <input type="text" id="currentBalance" value="${formattedBalance}" required />
     </div>
     <div class="form-group">
       <label>Color de tarjeta:</label>
       <input type="color" id="color" value="${acc.color || '#1a73e8'}" list="colorPalette">
       <datalist id="colorPalette">
-        <option value="#04128C"></option> <!-- BBVA -->
+        <option value="#0100e0"></option> <!-- BBVA -->
         <option value="#fb6405"></option> <!-- ING -->
         <option value="#04ac94"></option> <!-- N26 -->
         <option value="#eb0404"></option> <!-- Santander -->
@@ -889,25 +893,39 @@ async function openEditAccountForm(acc) {
     }
   };
 
-  // NO se aplica formateo automático en el input de saldo de edición
-  // const balanceInput = document.getElementById('currentBalance');
-  // let lastValue = balanceInput.value;
-  // balanceInput.addEventListener('input', (e) => { ... }); // Eliminado
+  // Lógica para el input de saldo con formato numérico (punto para miles, coma para decimales)
+  const balanceInput = document.getElementById('currentBalance');
+  let lastValue = balanceInput.value;
+  balanceInput.addEventListener('input', (e) => {
+    let value = e.target.value;
+    // Permitir solo números, comas y puntos
+    value = value.replace(/[^\d,.]/g, '');
+    // Si tiene más de una coma, dejar solo la primera
+    const parts = value.split(',');
+    if (parts.length > 2) {
+      value = parts[0] + ',' + parts.slice(1).join('');
+    }
+    // Formatear visualmente (punto para miles, coma para decimales)
+    const [integer, decimal] = value.split(',');
+    if (integer) {
+      const formattedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      value = decimal ? formattedInteger + ',' + decimal : formattedInteger;
+    }
+    // Solo mostramos el valor formateado, no lo cambiamos internamente
+    if (value !== e.target.value) {
+      e.target.value = value;
+    }
+    lastValue = value;
+  });
 
   document.getElementById('btnUpdateAccount').onclick = async () => {
-    let currentBalanceStr = document.getElementById('currentBalance').value.trim(); // Obtener el valor como string
+    let currentBalanceStr = balanceInput.value.trim(); // Usar el input formateado
     if (currentBalanceStr === '') {
       showToast('El saldo no puede estar vacío.');
       return;
     }
-    // Validar y convertir el saldo
-    // Permitir solo números, comas y puntos
-    if (!/^\d*[\.,]?\d*$/.test(currentBalanceStr)) {
-      showToast('Formato de saldo inválido. Usa solo números y coma (,) o punto (.) para decimales.');
-      return;
-    }
-    // Reemplazar coma por punto para parsear como número
-    currentBalanceStr = currentBalanceStr.replace(',', '.');
+    // Convertir de nuevo a número con coma como decimal
+    currentBalanceStr = currentBalanceStr.replace(/\./g, '').replace(',', '.');
     const currentBalance = parseFloat(currentBalanceStr);
     if (isNaN(currentBalance)) {
       showToast('Saldo inválido.');
@@ -1027,10 +1045,10 @@ async function showReturnsList() {
     const acc = accMap[r.accountId];
     const displayName = acc ? `${acc.bank}${acc.description ? ` (${acc.description})` : ''}` : 'Cuenta eliminada';
     const typeLabel = r.returnType === 'dividend' ? 'Dividendo' : 'Interés';
-    // --- NUEVO: Obtener estilos del borde basados en la cuenta ---
-    const colorStyle = acc?.color ? `color: ${acc.color};` : ''; // Color del texto principal (opcional)
+    // --- NUEVO: Estilo de borde y color según cuenta ---
+    const colorStyle = acc?.color ? `color: ${acc.color};` : '';
     const borderStyle = acc?.isValueAccount && acc?.color ? `border: 2px solid ${acc.color};` : (acc?.color ? `border-left: 4px solid ${acc.color};` : '');
-    const isValueAccountClass = acc?.isValueAccount ? ' value-account' : ''; // Clase para borde completo (opcional, si se usa en CSS)
+    const isValueAccountClass = acc?.isValueAccount ? ' value-account' : '';
     // ---
     html += `
       <div class="asset-item${isValueAccountClass}" style="${borderStyle}">
@@ -1061,7 +1079,9 @@ async function showReturnsList() {
         const display = a.bank + (a.description ? ` (${a.description})` : '');
         return `<option value="${a.id}" ${a.id === ret.accountId ? 'selected' : ''}>${display}</option>`;
       }).join('');
-      // Mostrar el importe original sin formato especial en el input
+      // --- NUEVO: Formatear importe con coma decimal para mostrarlo correctamente ---
+      const formattedAmount = formatNumber(ret.amount);
+
       const form = `
         <div class="form-group">
           <label>Cuenta:</label>
@@ -1076,7 +1096,7 @@ async function showReturnsList() {
         </div>
         <div class="form-group">
           <label>Importe (€):</label>
-          <input type="text" id="editReturnAmount" value="${ret.amount}" required />
+          <input type="text" id="editReturnAmount" value="${formattedAmount}" required />
         </div>
         <div class="form-group">
           <label>Fecha:</label>
