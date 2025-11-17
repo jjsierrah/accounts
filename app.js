@@ -635,7 +635,7 @@ async function renderAccountsSummary() {
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
-              }
+}
 
 // --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
 function updateDetailByYear(title, selectId, detailId) {
@@ -1177,6 +1177,60 @@ async function showGlobalReturns() {
   const totalInterests = returns.filter(r => r.returnType === 'interest').reduce((sum, r) => sum + r.amount, 0);
   const totalReturns = totalDividends + totalInterests;
 
+  let html = '<h3>Rendimiento Global</h3>';
+
+  // --- NUEVO: Gráfico de Proporción (Pastel) ---
+  const chartSize = 150;
+  const radius = chartSize / 2;
+  const centerX = radius;
+  const centerY = radius;
+
+  // Calcular ángulos en radianes
+  const dividendAngle = (totalDividends / totalReturns) * 2 * Math.PI;
+  const interestAngle = (totalInterests / totalReturns) * 2 * Math.PI;
+
+  // Función para crear un path de sector circular en SVG
+  function createPieSlice(startAngle, endAngle, color) {
+    const x1 = centerX + radius * Math.cos(startAngle);
+    const y1 = centerY + radius * Math.sin(startAngle);
+    const x2 = centerX + radius * Math.cos(endAngle);
+    const y2 = centerY + radius * Math.sin(endAngle);
+    const largeArcFlag = endAngle - startAngle <= Math.PI ? "0" : "1";
+    return `<path d="M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z" fill="${color}" />`;
+  }
+
+  let chartHtml = '';
+  if (totalDividends > 0 || totalInterests > 0) {
+    chartHtml = `
+      <div style="display: flex; justify-content: center; align-items: center; margin: 20px 0;">
+        <svg width="${chartSize}" height="${chartSize}" viewBox="0 0 ${chartSize} ${chartSize}">
+          ${totalDividends > 0 ? createPieSlice(0, dividendAngle, '#2196F3') : ''}
+          ${totalInterests > 0 ? createPieSlice(dividendAngle, dividendAngle + interestAngle, '#4CAF50') : ''}
+        </svg>
+        <div style="margin-left: 20px;">
+          <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <div style="width: 16px; height: 16px; background: #2196F3; margin-right: 8px;"></div>
+            <span>Dividendos (${((totalDividends / totalReturns) * 100).toFixed(1)}%)</span>
+          </div>
+          <div style="display: flex; align-items: center;">
+            <div style="width: 16px; height: 16px; background: #4CAF50; margin-right: 8px;"></div>
+            <span>Intereses (${((totalInterests / totalReturns) * 100).toFixed(1)}%)</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  // ---
+
+  html += `<div class="summary-card">
+              <div class="dividend-line"><strong>Total Dividendos:</strong> <strong>${formatCurrency(totalDividends)}</strong></div>
+              <div class="dividend-line"><strong>Total Intereses:</strong> <strong>${formatCurrency(totalInterests)}</strong></div>
+              <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
+              <div class="dividend-line"><strong>Total Rendimiento:</strong> <strong>${formatCurrency(totalReturns)}</strong></div>
+            </div>`;
+
+  html += chartHtml; // Añadir el gráfico de pastel
+
   // Agrupar por año
   const byYear = {};
   for (const r of returns) {
@@ -1188,14 +1242,6 @@ async function showGlobalReturns() {
       byYear[year].interest += r.amount;
     }
   }
-
-  let html = '<h3>Rendimiento Global</h3>';
-  html += `<div class="summary-card">
-              <div class="dividend-line"><strong>Total Dividendos:</strong> <strong>${formatCurrency(totalDividends)}</strong></div>
-              <div class="dividend-line"><strong>Total Intereses:</strong> <strong>${formatCurrency(totalInterests)}</strong></div>
-              <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
-              <div class="dividend-line"><strong>Total Rendimiento:</strong> <strong>${formatCurrency(totalReturns)}</strong></div>
-            </div>`;
 
   // Detalle por año
   html += `<div class="group-title">Por Año</div>`;
@@ -1210,9 +1256,9 @@ async function showGlobalReturns() {
              </div>`;
   }
 
-  // Aquí es donde iría la lógica para el gráfico y la proporción si se implementa más adelante
+  // Aquí es donde iría la lógica para el gráfico de evolución si se implementa más adelante
   // Por ahora, solo mostramos la información básica
-  html += `<p class="modal-note">Aquí se mostrará la evolución gráfica y la proporción en futuras actualizaciones.</p>`;
+  html += `<p class="modal-note">Aquí se mostrará la evolución gráfica en futuras actualizaciones.</p>`;
 
   openModal('Rendimiento Global', html);
 }
@@ -1370,7 +1416,7 @@ function showHelp() {
     <p>Tus datos <strong>se guardan solo en tu dispositivo</strong>.</p>
   `;
   openModal('Ayuda', content);
-}
+        }
 
 // --- INICIO (actualizado para usar funciones de Parte 3) ---
 document.addEventListener('DOMContentLoaded', () => {
