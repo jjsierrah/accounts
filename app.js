@@ -210,11 +210,6 @@ async function showAccountList() {
     }
   };
 }
-// Variables globales para el detalle de rendimientos
-let orderedAccountsForDetail = [];
-let dividendsForDetail = [];
-let interestsForDetail = [];
-
 // --- RENDER RESUMEN ---
 async function renderAccountsSummary() {
   const summaryTotals = document.getElementById('summary-totals');
@@ -321,12 +316,6 @@ async function renderAccountsSummary() {
                 transition: background 0.2s;
                 /* Ajuste para que el texto no se corte */
                 padding-right: 30px; /* Espacio para la flecha */
-                /* Ocultar flecha nativa */
-                -webkit-appearance: none;
-                -moz-appearance: none;
-                appearance: none;
-                /* Para Firefox */
-                -ms-appearance: none;
               ">
                 <option value="">Todos</option>
         `;
@@ -407,12 +396,6 @@ async function renderAccountsSummary() {
                 transition: background 0.2s;
                 /* Ajuste para que el texto no se corte */
                 padding-right: 30px; /* Espacio para la flecha */
-                /* Ocultar flecha nativa */
-                -webkit-appearance: none;
-                -moz-appearance: none;
-                appearance: none;
-                /* Para Firefox */
-                -ms-appearance: none;
               ">
                 <option value="">Todos</option>
         `;
@@ -445,6 +428,17 @@ async function renderAccountsSummary() {
       }
     }
 
+    // --- FILTROS POR ENTIDAD ---
+    const allBanks = [...new Set(accounts.map(a => a.bank))];
+    fullHtml += `
+      <div class="filters-container">
+        <button class="filter-btn all active" data-bank="">Todos</button>
+    `;
+    allBanks.forEach(bank => {
+      fullHtml += `<button class="filter-btn" data-bank="${bank}">${bank}</button>`;
+    });
+    fullHtml += `</div>`;
+
     // --- SECCIÓN DE CUENTAS ---
     fullHtml += `<div class="group-title">Cuentas</div>`; // Título de Cuentas
     for (const acc of orderedAccountsForDetail) { // Usar la variable global aquí también
@@ -455,9 +449,9 @@ async function renderAccountsSummary() {
       const isValueAccountClass = acc.isValueAccount ? ' value-account' : ''; // Clase para borde completo
       const accountNumberDisplay = acc.accountNumber ? (acc.isValueAccount ? acc.accountNumber.toUpperCase() : formatIBAN(acc.accountNumber)) : '';
       fullHtml += `
-        <div class="asset-item${isValueAccountClass}" style="${borderStyle}" data-id="${acc.id}" draggable="true">
+        <div class="asset-item${isValueAccountClass}" style="${borderStyle}" data-id="${acc.id}" data-bank="${acc.bank}" draggable="true">
           <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;"></button><br>` : ''}
+          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
           Titular: ${holderLine}<br>
           Saldo: ${formatCurrency(acc.currentBalance)}<br>
           ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
@@ -466,6 +460,26 @@ async function renderAccountsSummary() {
     }
 
     summaryContainer.innerHTML = fullHtml;
+
+    // --- LÓGICA DE FILTRO POR ENTIDAD ---
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    filterButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        // Actualizar botones activos
+        filterButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+
+        const selectedBank = button.dataset.bank;
+        const accountItems = document.querySelectorAll('.asset-item');
+        accountItems.forEach(item => {
+          if (selectedBank === '' || item.dataset.bank === selectedBank) {
+            item.style.display = 'block';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+      });
+    });
 
     // --- LÓGICA DE DRAG & DROP ---
     const list = summaryContainer; // Ahora summaryContainer es el contenedor de drag & drop
@@ -547,10 +561,10 @@ async function renderAccountsSummary() {
         const number = e.target.dataset.number;
         if (number) {
           navigator.clipboard.writeText(number).then(() => {
-            showToast(' Nº de cuenta copiado.');
+            showToast('✅ Nº de cuenta copiado.');
           }).catch(err => {
             console.error('Error al copiar:', err);
-            showToast(' Error al copiar.');
+            showToast('❌ Error al copiar.');
           });
         }
       });
@@ -621,8 +635,7 @@ async function renderAccountsSummary() {
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
-      }
-
+                                                               }
 // --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
 function updateDetailByYear(title, selectId, detailId) {
     const yearSelect = document.getElementById(selectId);
@@ -669,7 +682,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // initTheme(); // Se llama en Parte 3
   // initMenu();  // Se llama en Parte 3
 });
-
 // --- FORMULARIOS DE CUENTAS ---
 async function showAddAccountForm() {
   // Obtener entidades existentes para datalist
