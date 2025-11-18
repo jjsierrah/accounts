@@ -635,8 +635,7 @@ async function renderAccountsSummary() {
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
-            }
-
+}
 // --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
 function updateDetailByYear(title, selectId, detailId) {
     const yearSelect = document.getElementById(selectId);
@@ -983,6 +982,7 @@ async function showAddReturnForm() {
       <select id="returnType">
         <option value="interest">Interés</option>
         <option value="dividend">Dividendo</option>
+        <option value="sale">Venta</option> <!-- NUEVO -->
       </select>
     </div>
     <div class="form-group">
@@ -995,7 +995,7 @@ async function showAddReturnForm() {
     </div>
     <div class="form-group">
       <label>Nota (opcional):</label>
-      <input type="text" id="returnNote" placeholder="Ej: Dividendo BBVA, Interés trimestral..." />
+      <input type="text" id="returnNote" placeholder="Ej: Dividendo BBVA, Interés trimestral, Venta de acciones..." />
     </div>
     <button id="btnSaveReturn" class="btn-primary">Añadir Rendimiento</button>
   `;
@@ -1013,21 +1013,21 @@ async function showAddReturnForm() {
       return;
     }
     // Validar y convertir el importe
-    // Permitir solo números, comas y puntos
-    if (!/^\d*[\.,]?\d*$/.test(amountStr)) {
-      showToast('Formato de importe inválido. Usa solo números y coma (,) o punto (.) para decimales.');
+    // Permitir solo números, comas y puntos, y el signo menos al principio
+    if (!/^[-]?\d*[\.,]?\d*$/.test(amountStr)) {
+      showToast('Formato de importe inválido. Usa solo números, coma (,), punto (.), y opcionalmente "-" al inicio.');
       return;
     }
     // Reemplazar coma por punto para parsear como número
     amountStr = amountStr.replace(',', '.');
     const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount <= 0) {
-      showToast('Importe inválido o menor/igual a cero.');
+    if (isNaN(amount)) { // Permitir cero, positivo o negativo
+      showToast('Importe inválido.');
       return;
     }
 
     const accountId = parseInt(document.getElementById('returnAccount').value);
-    const returnType = document.getElementById('returnType').value;
+    const returnType = document.getElementById('returnType').value; // Nuevo tipo "sale" es posible
     const date = document.getElementById('returnDate').value;
     const note = document.getElementById('returnNote').value.trim() || null;
 
@@ -1036,6 +1036,7 @@ async function showAddReturnForm() {
       return;
     }
 
+    // Guardar el rendimiento con el tipo especificado (interest, dividend, sale) y el valor tal cual (puede ser negativo)
     await db.returns.add({ accountId, amount, date, returnType, note });
     document.getElementById('modalOverlay').style.display = 'none';
     renderAccountsSummary();
@@ -1057,7 +1058,36 @@ async function showReturnsList() {
   returns.forEach(r => {
     const acc = accMap[r.accountId];
     const displayName = acc ? `${acc.bank}${acc.description ? ` (${acc.description})` : ''}` : 'Cuenta eliminada';
-    const typeLabel = r.returnType === 'dividend' ? 'Dividendo' : 'Interés';
+    // --- NUEVO: Diferenciar tipo y color según sea venta o no, y según signo del importe ---
+    let typeLabel = '';
+    let amountDisplay = formatCurrency(r.amount);
+    let amountColor = 'var(--text-primary)'; // Color por defecto
+
+    switch (r.returnType) {
+      case 'dividend':
+        typeLabel = 'Dividendo';
+        // Dividendos normalmente son positivos, color por defecto
+        break;
+      case 'interest':
+        typeLabel = 'Interés';
+        // Intereses normalmente son positivos, color por defecto
+        break;
+      case 'sale':
+        typeLabel = 'Venta';
+        // Para ventas, colorear según el signo del importe
+        if (r.amount < 0) {
+          amountColor = 'red'; // Pérdida
+        } else if (r.amount > 0) {
+          amountColor = 'green'; // Ganancia
+        } else {
+          amountColor = 'var(--text-primary)'; // Si es cero
+        }
+        break;
+      default:
+        typeLabel = r.returnType; // Por si acaso hay un tipo desconocido
+    }
+    // ---
+
     // --- NUEVO: Estilo de borde y color según cuenta ---
     const colorStyle = acc?.color ? `color: ${acc.color};` : '';
     const borderStyle = acc?.isValueAccount && acc?.color ? `border: 2px solid ${acc.color};` : (acc?.color ? `border-left: 4px solid ${acc.color};` : '');
@@ -1066,7 +1096,7 @@ async function showReturnsList() {
     html += `
       <div class="asset-item${isValueAccountClass}" style="${borderStyle}">
         <strong style="${colorStyle}">${displayName}</strong><br>
-        ${typeLabel}: ${formatCurrency(r.amount)} el ${formatDate(r.date)}${r.note ? ` - ${r.note}` : ''}
+        ${typeLabel}: <span style="color: ${amountColor};">${amountDisplay}</span> el ${formatDate(r.date)}${r.note ? ` - ${r.note}` : ''}
         <div class="modal-actions">
           <button class="btn-edit" data-id="${r.id}">Editar</button>
           <button class="btn-delete" data-id="${r.id}">Eliminar</button>
@@ -1092,8 +1122,12 @@ async function showReturnsList() {
         const display = a.bank + (a.description ? ` (${a.description})` : '');
         return `<option value="${a.id}" ${a.id === ret.accountId ? 'selected' : ''}>${display}</option>`;
       }).join('');
-      // --- NUEVO: Formatear importe con coma decimal para mostrarlo correctamente ---
-      const formattedAmount = formatNumber(ret.amount);
+      // --- NUEVO: Formatear importe con coma decimal para mostrarlo correctamente, preservando el signo ---
+      // Nota: formatNumber no maneja signos negativos de forma específica, solo formatea el valor absoluto.
+      // Mostramos el signo explícitamente si es negativo.
+      const absAmount = Math.abs(ret.amount);
+      const formattedAbsAmount = formatNumber(absAmount);
+      const displayAmount = ret.amount < 0 ? `-${formattedAbsAmount}` : formattedAbsAmount;
 
       const form = `
         <div class="form-group">
@@ -1105,11 +1139,12 @@ async function showReturnsList() {
           <select id="editReturnType">
             <option value="interest" ${ret.returnType === 'interest' ? 'selected' : ''}>Interés</option>
             <option value="dividend" ${ret.returnType === 'dividend' ? 'selected' : ''}>Dividendo</option>
+            <option value="sale" ${ret.returnType === 'sale' ? 'selected' : ''}>Venta</option> <!-- NUEVO -->
           </select>
         </div>
         <div class="form-group">
           <label>Importe (€):</label>
-          <input type="text" id="editReturnAmount" value="${formattedAmount}" required />
+          <input type="text" id="editReturnAmount" value="${displayAmount}" required />
         </div>
         <div class="form-group">
           <label>Fecha:</label>
@@ -1135,27 +1170,28 @@ async function showReturnsList() {
           return;
         }
         // Validar y convertir el importe
-        // Permitir solo números, comas y puntos
-        if (!/^\d*[\.,]?\d*$/.test(amountStr)) {
-          showToast('Formato de importe inválido. Usa solo números y coma (,) o punto (.) para decimales.');
+        // Permitir solo números, comas y puntos, y el signo menos al principio
+        if (!/^[-]?\d*[\.,]?\d*$/.test(amountStr)) {
+          showToast('Formato de importe inválido. Usa solo números, coma (,), punto (.), y opcionalmente "-" al inicio.');
           return;
         }
         // Reemplazar coma por punto para parsear como número
         amountStr = amountStr.replace(',', '.');
         const amount = parseFloat(amountStr);
-        if (isNaN(amount) || amount <= 0) {
-          showToast('Importe inválido o menor/igual a cero.');
+        if (isNaN(amount)) { // Permitir cero, positivo o negativo
+          showToast('Importe inválido.');
           return;
         }
 
         const accountId = parseInt(document.getElementById('editReturnAccount').value);
-        const returnType = document.getElementById('editReturnType').value;
+        const returnType = document.getElementById('editReturnType').value; // Nuevo tipo "sale" es posible
         const date = document.getElementById('editReturnDate').value;
         const note = document.getElementById('editReturnNote').value.trim() || null;
         if (!isDateValidAndNotFuture(date)) {
           showToast('Fecha inválida.');
           return;
         }
+        // Actualizar el rendimiento con el tipo especificado y el valor tal cual (puede ser negativo)
         await db.returns.update(id, { accountId, amount, date, returnType, note });
         document.getElementById('modalOverlay').style.display = 'none';
         showReturnsList();
@@ -1163,7 +1199,6 @@ async function showReturnsList() {
     }
   };
 }
-
 // --- FUNCIÓN PARA RENDIMIENTO GLOBAL ---
 async function showGlobalReturns() {
   const returns = await db.returns.toArray();
@@ -1172,76 +1207,83 @@ async function showGlobalReturns() {
     return;
   }
 
-  // Calcular totales generales
+  // Calcular totales generales (ahora incluyen ventas negativas)
   const totalDividends = returns.filter(r => r.returnType === 'dividend').reduce((sum, r) => sum + r.amount, 0);
   const totalInterests = returns.filter(r => r.returnType === 'interest').reduce((sum, r) => sum + r.amount, 0);
-  const totalReturns = totalDividends + totalInterests;
+  const totalSales = returns.filter(r => r.returnType === 'sale').reduce((sum, r) => sum + r.amount, 0); // Puede ser positivo o negativo
+  const totalReturns = totalDividends + totalInterests + totalSales;
 
   let html = '<h3>Rendimiento Global</h3>';
 
   // --- Gráfico de Proporción (Pastel) ---
-  const chartSize = 150;
-  const radius = chartSize / 2;
-  const centerX = radius;
-  const centerY = radius;
+  // Solo para dividendos e intereses, o dividir en ganancias/pérdidas por venta?
+  // Para simplificar, hagamoslo con Ganancias Totales (dividendos + intereses + ventas_positivas) vs Pérdidas Totales (ventas_negativas)
+  const totalGains = totalDividends + totalInterests + Math.max(0, totalSales); // Ganancias: Dividendos + Intereses + Ventas positivas
+  const totalLosses = Math.min(0, totalSales); // Pérdidas: solo ventas negativas
 
-  // Calcular ángulos en radianes
-  const dividendAngle = (totalDividends / totalReturns) * 2 * Math.PI;
-  const interestAngle = (totalInterests / totalReturns) * 2 * Math.PI;
+  if (totalGains !== 0 || totalLosses !== 0) { // Solo mostrar gráfico si hay ganancias o pérdidas
+    const chartSize = 150;
+    const radius = chartSize / 2;
+    const centerX = radius;
+    const centerY = radius;
 
-  // Función para crear un path de sector circular en SVG
-  function createPieSlice(startAngle, endAngle, color) {
-    const x1 = centerX + radius * Math.cos(startAngle);
-    const y1 = centerY + radius * Math.sin(startAngle);
-    const x2 = centerX + radius * Math.cos(endAngle);
-    const y2 = centerY + radius * Math.sin(endAngle);
-    const largeArcFlag = endAngle - startAngle <= Math.PI ? "0" : "1";
-    return `<path d="M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z" fill="${color}" />`;
-  }
+    const totalGross = Math.abs(totalGains) + Math.abs(totalLosses);
+    const gainAngle = (Math.abs(totalGains) / totalGross) * 2 * Math.PI;
+    const lossAngle = (Math.abs(totalLosses) / totalGross) * 2 * Math.PI;
 
-  let pieChartHtml = '';
-  if (totalDividends > 0 || totalInterests > 0) {
-    pieChartHtml = `
+    // Función para crear un path de sector circular en SVG
+    function createPieSlice(startAngle, endAngle, color) {
+      const x1 = centerX + radius * Math.cos(startAngle);
+      const y1 = centerY + radius * Math.sin(startAngle);
+      const x2 = centerX + radius * Math.cos(endAngle);
+      const y2 = centerY + radius * Math.sin(endAngle);
+      const largeArcFlag = endAngle - startAngle <= Math.PI ? "0" : "1";
+      return `<path d="M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z" fill="${color}" />`;
+    }
+
+    let pieChartHtml = `
       <div style="display: flex; justify-content: center; align-items: center; margin: 20px 0;">
         <svg width="${chartSize}" height="${chartSize}" viewBox="0 0 ${chartSize} ${chartSize}">
-          ${totalDividends > 0 ? createPieSlice(0, dividendAngle, '#2196F3') : ''}
-          ${totalInterests > 0 ? createPieSlice(dividendAngle, dividendAngle + interestAngle, '#4CAF50') : ''}
+          ${totalGains !== 0 ? createPieSlice(0, gainAngle, '#4CAF50') : ''}
+          ${totalLosses !== 0 ? createPieSlice(gainAngle, gainAngle + lossAngle, '#F44336') : ''}
         </svg>
         <div style="margin-left: 20px;">
           <div style="display: flex; align-items: center; margin-bottom: 8px;">
-            <div style="width: 16px; height: 16px; background: #2196F3; margin-right: 8px;"></div>
-            <span>Dividendos (${((totalDividends / totalReturns) * 100).toFixed(1)}%)</span>
+            <div style="width: 16px; height: 16px; background: #4CAF50; margin-right: 8px;"></div>
+            <span>Ganancias (${((Math.abs(totalGains) / totalGross) * 100).toFixed(1)}%)</span>
           </div>
           <div style="display: flex; align-items: center;">
-            <div style="width: 16px; height: 16px; background: #4CAF50; margin-right: 8px;"></div>
-            <span>Intereses (${((totalInterests / totalReturns) * 100).toFixed(1)}%)</span>
+            <div style="width: 16px; height: 16px; background: #F44336; margin-right: 8px;"></div>
+            <span>Pérdidas (${((Math.abs(totalLosses) / totalGross) * 100).toFixed(1)}%)</span>
           </div>
         </div>
       </div>
     `;
+    html += pieChartHtml;
   }
   // ---
 
   html += `<div class="summary-card">
               <div class="dividend-line"><strong>Total Dividendos:</strong> <strong>${formatCurrency(totalDividends)}</strong></div>
               <div class="dividend-line"><strong>Total Intereses:</strong> <strong>${formatCurrency(totalInterests)}</strong></div>
+              <div class="dividend-line"><strong>Total Ventas Netas:</strong> <strong>${formatCurrency(totalSales)}</strong></div>
               <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
               <div class="dividend-line"><strong>Total Rendimiento:</strong> <strong>${formatCurrency(totalReturns)}</strong></div>
             </div>`;
-
-  html += pieChartHtml; // Añadir el gráfico de pastel
 
   // Agrupar por año
   const byYear = {};
   for (const r of returns) {
     const year = new Date(r.date).getFullYear();
-    if (!byYear[year]) byYear[year] = { dividend: 0, interest: 0, total: 0 };
+    if (!byYear[year]) byYear[year] = { dividend: 0, interest: 0, sale: 0, total: 0 };
     if (r.returnType === 'dividend') {
       byYear[year].dividend += r.amount;
-    } else {
+    } else if (r.returnType === 'interest') {
       byYear[year].interest += r.amount;
+    } else if (r.returnType === 'sale') {
+      byYear[year].sale += r.amount; // Puede ser positivo o negativo
     }
-    byYear[year].total = byYear[year].dividend + byYear[year].interest;
+    byYear[year].total = byYear[year].dividend + byYear[year].interest + byYear[year].sale;
   }
 
   // --- NUEVO: Gráfico de Evolución Anual (Barras) ---
@@ -1250,60 +1292,78 @@ async function showGlobalReturns() {
     const margin = { top: 20, right: 30, bottom: 40, left: 40 };
     const width = 500 - margin.left - margin.right;
     const height = 300 - margin.top - margin.bottom;
-    const barWidth = width / (years.length * 3) * 0.8; // Ancho de barra, dejar espacio para 3 series (dividendos, intereses, total)
-    const groupWidth = barWidth * 3; // Ancho del grupo de barras
-    const xScale = (year, index) => margin.left + (index * groupWidth) + (groupWidth / 2) - (barWidth * 1.5);
-    const maxValue = Math.max(...Object.values(byYear).map(y => y.total), 1); // Valor máximo para escalar Y, mínimo 1 para evitar divisiones por cero
-    const yScale = (value) => height + margin.top - (value / maxValue) * height;
+    // Calcular valores máximos y mínimos para escalar el eje Y alrededor de 0
+    const allValues = Object.values(byYear).flatMap(y => [y.dividend, y.interest, y.sale, y.total]);
+    const maxValue = Math.max(...allValues, 0); // Cero como mínimo para el gráfico
+    const minValue = Math.min(...allValues, 0); // Cero como máximo para el gráfico
+    const totalRange = maxValue - minValue;
+    if (totalRange > 0) { // Evitar división por cero
+        const barWidth = width / (years.length * 4) * 0.8; // Ancho de barra, dejar espacio para 4 series (dividendos, intereses, ventas, total)
+        const groupWidth = barWidth * 4; // Ancho del grupo de barras
+        const xScale = (year, index) => margin.left + (index * groupWidth) + (groupWidth / 2) - (barWidth * 2);
+        // Escala Y: 0 en el centro del gráfico
+        const yZero = height + margin.top - (0 - minValue) / totalRange * height;
+        const yScale = (value) => height + margin.top - (value - minValue) / totalRange * height;
 
-    let barsHtml = '';
-    years.forEach((year, index) => {
-      const x = xScale(year, index);
-      const yDiv = yScale(byYear[year].dividend);
-      const yInt = yScale(byYear[year].interest);
-      const yTotal = yScale(byYear[year].total);
-      const hDiv = height - (yDiv - margin.top);
-      const hInt = height - (yInt - margin.top);
-      const hTotal = height - (yTotal - margin.top);
+        let barsHtml = '';
+        years.forEach((year, index) => {
+          const x = xScale(year, index);
+          const yDiv = yScale(byYear[year].dividend);
+          const yInt = yScale(byYear[year].interest);
+          const ySale = yScale(byYear[year].sale);
+          const yTotal = yScale(byYear[year].total);
+          // Altura de la barra: desde el valor hasta el eje X (0)
+          const hDiv = yZero - yDiv;
+          const hInt = yZero - yInt;
+          const hSale = yZero - ySale;
+          const hTotal = yZero - yTotal;
 
-      barsHtml += `<rect x="${x}" y="${yDiv}" width="${barWidth}" height="${hDiv}" fill="#2196F3" />`; // Dividendos
-      barsHtml += `<rect x="${x + barWidth}" y="${yInt}" width="${barWidth}" height="${hInt}" fill="#4CAF50" />`; // Intereses
-      barsHtml += `<rect x="${x + barWidth * 2}" y="${yTotal}" width="${barWidth}" height="${hTotal}" fill="#FF9800" opacity="0.7"/>`; // Total
-    });
+          barsHtml += `<rect x="${x}" y="${hDiv >= 0 ? yDiv : yZero}" width="${barWidth}" height="${Math.abs(hDiv)}" fill="#2196F3" />`; // Dividendos
+          barsHtml += `<rect x="${x + barWidth}" y="${hInt >= 0 ? yInt : yZero}" width="${barWidth}" height="${Math.abs(hInt)}" fill="#4CAF50" />`; // Intereses
+          barsHtml += `<rect x="${x + barWidth * 2}" y="${hSale >= 0 ? ySale : yZero}" width="${barWidth}" height="${Math.abs(hSale)}" fill="#FF9800" opacity="0.7"/>`; // Ventas
+          barsHtml += `<rect x="${x + barWidth * 3}" y="${hTotal >= 0 ? yTotal : yZero}" width="${barWidth}" height="${Math.abs(hTotal)}" fill="#9C27B0" opacity="0.7"/>`; // Total
+        });
 
-    // Ejes
-    let axesHtml = '';
-    // Eje X
-    axesHtml += `<line x1="${margin.left}" y1="${height + margin.top}" x2="${width + margin.left}" y2="${height + margin.top}" stroke="var(--border-color)" />`;
-    years.forEach((year, index) => {
-      const x = xScale(year, index) + (groupWidth / 2) - barWidth;
-      axesHtml += `<text x="${x}" y="${height + margin.top + 15}" text-anchor="middle" fill="var(--text-primary)" font-size="12">${year}</text>`;
-    });
-    // Eje Y
-    axesHtml += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height + margin.top}" stroke="var(--border-color)" />`;
-    // Etiquetas Y (ejemplo con 4 ticks)
-    const tickCount = 4;
-    for (let i = 0; i <= tickCount; i++) {
-      const value = (maxValue / tickCount) * i;
-      const y = yScale(value);
-      axesHtml += `<line x1="${margin.left - 5}" y1="${y}" x2="${margin.left}" y2="${y}" stroke="var(--border-color)" />`;
-      axesHtml += `<text x="${margin.left - 10}" y="${y + 4}" text-anchor="end" fill="var(--text-primary)" font-size="12">${formatNumber(value)}</text>`;
+        // Ejes
+        let axesHtml = '';
+        // Eje X
+        axesHtml += `<line x1="${margin.left}" y1="${yZero}" x2="${width + margin.left}" y2="${yZero}" stroke="var(--border-color)" stroke-dasharray="4,2"/>`;
+        years.forEach((year, index) => {
+          const x = xScale(year, index) + (groupWidth / 2) - barWidth * 1.5;
+          axesHtml += `<text x="${x}" y="${height + margin.top + 15}" text-anchor="middle" fill="var(--text-primary)" font-size="12">${year}</text>`;
+        });
+        // Eje Y
+        axesHtml += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height + margin.top}" stroke="var(--border-color)" />`;
+        // Etiquetas Y (ticks personalizados)
+        const tickCount = 5;
+        const tickStep = totalRange / tickCount;
+        for (let i = 0; i <= tickCount; i++) {
+          const value = minValue + i * tickStep;
+          const y = yScale(value);
+          axesHtml += `<line x1="${margin.left - 5}" y1="${y}" x2="${margin.left}" y2="${y}" stroke="var(--border-color)" />`;
+          axesHtml += `<text x="${margin.left - 10}" y="${y + 4}" text-anchor="end" fill="var(--text-primary)" font-size="12">${formatNumber(value)}</text>`;
+        }
+
+        html += `<div class="group-title">Evolución Anual</div>
+                 <div style="overflow-x: auto; padding: 10px 0;">
+                   <svg width="500" height="350" viewBox="0 0 500 350">
+                     ${axesHtml}
+                     ${barsHtml}
+                     <!-- Leyenda -->
+                     <rect x="370" y="20" width="12" height="12" fill="#2196F3" />
+                     <text x="388" y="30" fill="var(--text-primary)" font-size="12">Dividendos</text>
+                     <rect x="370" y="40" width="12" height="12" fill="#4CAF50" />
+                     <text x="388" y="50" fill="var(--text-primary)" font-size="12">Intereses</text>
+                     <rect x="370" y="60" width="12" height="12" fill="#FF9800" opacity="0.7"/>
+                     <text x="388" y="70" fill="var(--text-primary)" font-size="12">Ventas Netas</text>
+                     <rect x="370" y="80" width="12" height="12" fill="#9C27B0" opacity="0.7"/>
+                     <text x="388" y="90" fill="var(--text-primary)" font-size="12">Total</text>
+                   </svg>
+                 </div>`;
+    } else {
+        html += `<div class="group-title">Evolución Anual</div>
+                 <p>No hay datos suficientes para mostrar la evolución.</p>`;
     }
-
-    html += `<div class="group-title">Evolución Anual</div>
-             <div style="overflow-x: auto; padding: 10px 0;">
-               <svg width="500" height="350" viewBox="0 0 500 350">
-                 ${axesHtml}
-                 ${barsHtml}
-                 <!-- Leyenda -->
-                 <rect x="370" y="20" width="12" height="12" fill="#2196F3" />
-                 <text x="388" y="30" fill="var(--text-primary)" font-size="12">Dividendos</text>
-                 <rect x="370" y="40" width="12" height="12" fill="#4CAF50" />
-                 <text x="388" y="50" fill="var(--text-primary)" font-size="12">Intereses</text>
-                 <rect x="370" y="60" width="12" height="12" fill="#FF9800" opacity="0.7"/>
-                 <text x="388" y="70" fill="var(--text-primary)" font-size="12">Total</text>
-               </svg>
-             </div>`;
   }
   // ---
 
@@ -1316,6 +1376,7 @@ async function showGlobalReturns() {
               <div class="dividend-line"><strong>${year}:</strong></div>
               <div class="dividend-line">Dividendos: <strong>${formatCurrency(yearData.dividend)}</strong></div>
               <div class="dividend-line">Intereses: <strong>${formatCurrency(yearData.interest)}</strong></div>
+              <div class="dividend-line">Ventas Netas: <strong>${formatCurrency(yearData.sale)}</strong></div>
               <div class="dividend-line"><strong>Total: ${formatCurrency(yearData.total)}</strong></div>
              </div>`;
   }
