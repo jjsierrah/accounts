@@ -451,7 +451,7 @@ async function renderAccountsSummary() {
       fullHtml += `
         <div class="asset-item${isValueAccountClass}" style="${borderStyle}" data-id="${acc.id}" data-bank="${acc.bank}" draggable="true">
           <strong style="${colorStyle}">${acc.bank}</strong> ${acc.description ? `(${acc.description})` : ''}<br>
-          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;">📋</button><br>` : ''}
+          ${accountNumberDisplay ? `Nº: ${accountNumberDisplay} <button class="btn-copy" data-number="${acc.accountNumber}" style="margin-left:8px; padding:2px 6px; font-size:0.8rem;"></button><br>` : ''}
           Titular: ${holderLine}<br>
           Saldo: ${formatCurrency(acc.currentBalance)}<br>
           ${acc.note ? `<small>Nota: ${acc.note}</small>` : ''}
@@ -561,10 +561,10 @@ async function renderAccountsSummary() {
         const number = e.target.dataset.number;
         if (number) {
           navigator.clipboard.writeText(number).then(() => {
-            showToast('✅ Nº de cuenta copiado.');
+            showToast(' Nº de cuenta copiado.');
           }).catch(err => {
             console.error('Error al copiar:', err);
-            showToast('❌ Error al copiar.');
+            showToast(' Error al copiar.');
           });
         }
       });
@@ -635,7 +635,7 @@ async function renderAccountsSummary() {
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
-}
+            }
 
 // --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
 function updateDetailByYear(title, selectId, detailId) {
@@ -1179,7 +1179,7 @@ async function showGlobalReturns() {
 
   let html = '<h3>Rendimiento Global</h3>';
 
-  // --- NUEVO: Gráfico de Proporción (Pastel) ---
+  // --- Gráfico de Proporción (Pastel) ---
   const chartSize = 150;
   const radius = chartSize / 2;
   const centerX = radius;
@@ -1199,9 +1199,9 @@ async function showGlobalReturns() {
     return `<path d="M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z" fill="${color}" />`;
   }
 
-  let chartHtml = '';
+  let pieChartHtml = '';
   if (totalDividends > 0 || totalInterests > 0) {
-    chartHtml = `
+    pieChartHtml = `
       <div style="display: flex; justify-content: center; align-items: center; margin: 20px 0;">
         <svg width="${chartSize}" height="${chartSize}" viewBox="0 0 ${chartSize} ${chartSize}">
           ${totalDividends > 0 ? createPieSlice(0, dividendAngle, '#2196F3') : ''}
@@ -1229,22 +1229,86 @@ async function showGlobalReturns() {
               <div class="dividend-line"><strong>Total Rendimiento:</strong> <strong>${formatCurrency(totalReturns)}</strong></div>
             </div>`;
 
-  html += chartHtml; // Añadir el gráfico de pastel
+  html += pieChartHtml; // Añadir el gráfico de pastel
 
   // Agrupar por año
   const byYear = {};
   for (const r of returns) {
     const year = new Date(r.date).getFullYear();
-    if (!byYear[year]) byYear[year] = { dividend: 0, interest: 0 };
+    if (!byYear[year]) byYear[year] = { dividend: 0, interest: 0, total: 0 };
     if (r.returnType === 'dividend') {
       byYear[year].dividend += r.amount;
     } else {
       byYear[year].interest += r.amount;
     }
+    byYear[year].total = byYear[year].dividend + byYear[year].interest;
   }
 
-  // Detalle por año
-  html += `<div class="group-title">Por Año</div>`;
+  // --- NUEVO: Gráfico de Evolución Anual (Barras) ---
+  const years = Object.keys(byYear).sort((a, b) => a - b); // Ordenar años de menor a mayor
+  if (years.length > 0) {
+    const margin = { top: 20, right: 30, bottom: 40, left: 40 };
+    const width = 500 - margin.left - margin.right;
+    const height = 300 - margin.top - margin.bottom;
+    const barWidth = width / (years.length * 3) * 0.8; // Ancho de barra, dejar espacio para 3 series (dividendos, intereses, total)
+    const groupWidth = barWidth * 3; // Ancho del grupo de barras
+    const xScale = (year, index) => margin.left + (index * groupWidth) + (groupWidth / 2) - (barWidth * 1.5);
+    const maxValue = Math.max(...Object.values(byYear).map(y => y.total), 1); // Valor máximo para escalar Y, mínimo 1 para evitar divisiones por cero
+    const yScale = (value) => height + margin.top - (value / maxValue) * height;
+
+    let barsHtml = '';
+    years.forEach((year, index) => {
+      const x = xScale(year, index);
+      const yDiv = yScale(byYear[year].dividend);
+      const yInt = yScale(byYear[year].interest);
+      const yTotal = yScale(byYear[year].total);
+      const hDiv = height - (yDiv - margin.top);
+      const hInt = height - (yInt - margin.top);
+      const hTotal = height - (yTotal - margin.top);
+
+      barsHtml += `<rect x="${x}" y="${yDiv}" width="${barWidth}" height="${hDiv}" fill="#2196F3" />`; // Dividendos
+      barsHtml += `<rect x="${x + barWidth}" y="${yInt}" width="${barWidth}" height="${hInt}" fill="#4CAF50" />`; // Intereses
+      barsHtml += `<rect x="${x + barWidth * 2}" y="${yTotal}" width="${barWidth}" height="${hTotal}" fill="#FF9800" opacity="0.7"/>`; // Total
+    });
+
+    // Ejes
+    let axesHtml = '';
+    // Eje X
+    axesHtml += `<line x1="${margin.left}" y1="${height + margin.top}" x2="${width + margin.left}" y2="${height + margin.top}" stroke="var(--border-color)" />`;
+    years.forEach((year, index) => {
+      const x = xScale(year, index) + (groupWidth / 2) - barWidth;
+      axesHtml += `<text x="${x}" y="${height + margin.top + 15}" text-anchor="middle" fill="var(--text-primary)" font-size="12">${year}</text>`;
+    });
+    // Eje Y
+    axesHtml += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height + margin.top}" stroke="var(--border-color)" />`;
+    // Etiquetas Y (ejemplo con 4 ticks)
+    const tickCount = 4;
+    for (let i = 0; i <= tickCount; i++) {
+      const value = (maxValue / tickCount) * i;
+      const y = yScale(value);
+      axesHtml += `<line x1="${margin.left - 5}" y1="${y}" x2="${margin.left}" y2="${y}" stroke="var(--border-color)" />`;
+      axesHtml += `<text x="${margin.left - 10}" y="${y + 4}" text-anchor="end" fill="var(--text-primary)" font-size="12">${formatNumber(value)}</text>`;
+    }
+
+    html += `<div class="group-title">Evolución Anual</div>
+             <div style="overflow-x: auto; padding: 10px 0;">
+               <svg width="500" height="350" viewBox="0 0 500 350">
+                 ${axesHtml}
+                 ${barsHtml}
+                 <!-- Leyenda -->
+                 <rect x="370" y="20" width="12" height="12" fill="#2196F3" />
+                 <text x="388" y="30" fill="var(--text-primary)" font-size="12">Dividendos</text>
+                 <rect x="370" y="40" width="12" height="12" fill="#4CAF50" />
+                 <text x="388" y="50" fill="var(--text-primary)" font-size="12">Intereses</text>
+                 <rect x="370" y="60" width="12" height="12" fill="#FF9800" opacity="0.7"/>
+                 <text x="388" y="70" fill="var(--text-primary)" font-size="12">Total</text>
+               </svg>
+             </div>`;
+  }
+  // ---
+
+  // Detalle por año (tabla)
+  html += `<div class="group-title">Detalle por Año</div>`;
   const sortedYears = Object.keys(byYear).sort((a, b) => b - a);
   for (const year of sortedYears) {
     const yearData = byYear[year];
@@ -1252,13 +1316,9 @@ async function showGlobalReturns() {
               <div class="dividend-line"><strong>${year}:</strong></div>
               <div class="dividend-line">Dividendos: <strong>${formatCurrency(yearData.dividend)}</strong></div>
               <div class="dividend-line">Intereses: <strong>${formatCurrency(yearData.interest)}</strong></div>
-              <div class="dividend-line"><strong>Total: ${formatCurrency(yearData.dividend + yearData.interest)}</strong></div>
+              <div class="dividend-line"><strong>Total: ${formatCurrency(yearData.total)}</strong></div>
              </div>`;
   }
-
-  // Aquí es donde iría la lógica para el gráfico de evolución si se implementa más adelante
-  // Por ahora, solo mostramos la información básica
-  html += `<p class="modal-note">Aquí se mostrará la evolución gráfica en futuras actualizaciones.</p>`;
 
   openModal('Rendimiento Global', html);
 }
@@ -1416,7 +1476,7 @@ function showHelp() {
     <p>Tus datos <strong>se guardan solo en tu dispositivo</strong>.</p>
   `;
   openModal('Ayuda', content);
-        }
+}
 
 // --- INICIO (actualizado para usar funciones de Parte 3) ---
 document.addEventListener('DOMContentLoaded', () => {
