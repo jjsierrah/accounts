@@ -635,7 +635,7 @@ async function renderAccountsSummary() {
     summaryTotals.innerHTML = '<p style="color:red">Error al cargar cuentas.</p>';
     if (summaryContainer) summaryContainer.innerHTML = '';
   }
-        }
+      }
 
 // --- FUNCIÓN ACTUALIZADA PARA DETALLE ---
 function updateDetailByYear(title, selectId, detailId) {
@@ -1214,12 +1214,13 @@ async function showGlobalReturns() {
   const totalSales = returns.filter(r => r.returnType === 'sale').reduce((sum, r) => sum + r.amount, 0); // Puede ser positivo o negativo
   const totalReturns = totalDividends + totalInterests + totalSales;
 
-  let html = '<h3>Rendimiento Global</h3>';
+  // --- CORREGIDO: Eliminar el título duplicado. El título se gestiona en openModal ---
+  let html = '';
 
   html += `<div class="summary-card">
               <div class="dividend-line"><strong>Total Dividendos:</strong> <strong>${formatCurrency(totalDividends)}</strong></div>
               <div class="dividend-line"><strong>Total Intereses:</strong> <strong>${formatCurrency(totalInterests)}</strong></div>
-              <div class="dividend-line"><strong>Total Ventas:</strong> <strong>${formatCurrency(totalSales)}</strong></div> <!-- CORREGIDO -->
+              <div class="dividend-line"><strong>Total Ventas:</strong> <strong>${formatCurrency(totalSales)}</strong></div>
               <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;">
               <div class="dividend-line"><strong>Total Rendimiento:</strong> <strong>${formatCurrency(totalReturns)}</strong></div>
             </div>`;
@@ -1239,7 +1240,7 @@ async function showGlobalReturns() {
     byYear[year].total = byYear[year].dividend + byYear[year].interest + byYear[year].sale;
   }
 
-  // --- NUEVO: Gráfico de Evolución Anual (Líneas) ---
+  // --- NUEVO: Gráfico de Evolución Anual (Líneas) con etiquetas redondeadas ---
   const years = Object.keys(byYear).sort((a, b) => a - b); // Ordenar años de menor a mayor
   if (years.length > 0) {
     const margin = { top: 20, right: 30, bottom: 50, left: 60 };
@@ -1287,13 +1288,36 @@ async function showGlobalReturns() {
         });
         // Eje Y
         axesHtml += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height + margin.top}" stroke="var(--border-color)" />`;
-        // Etiquetas Y (ticks)
+        // Etiquetas Y (ticks redondeados)
         const tickCount = 5;
-        for (let i = 0; i <= tickCount; i++) {
-          const value = minValue + (i * totalRange) / tickCount;
-          const y = yScale(value);
-          axesHtml += `<line x1="${margin.left - 5}" y1="${y}" x2="${margin.left}" y2="${y}" stroke="var(--border-color)" />`;
-          axesHtml += `<text x="${margin.left - 10}" y="${y + 4}" text-anchor="end" fill="var(--text-primary)" font-size="12">${formatNumber(value)}</text>`;
+        // Función para obtener un número redondo cercano
+        function roundToNearest(value, base) {
+          return Math.round(value / base) * base;
+        }
+        // Estimar un "step" redondo
+        const estimatedStep = Math.pow(10, Math.floor(Math.log10(totalRange / tickCount)));
+        const niceSteps = [1, 2, 5, 10];
+        let bestStep = estimatedStep;
+        let minError = Infinity;
+        for (const step of niceSteps) {
+          const candidateStep = step * estimatedStep;
+          const error = Math.abs((totalRange / candidateStep) - tickCount);
+          if (error < minError) {
+            minError = error;
+            bestStep = candidateStep;
+          }
+        }
+        const roundedMin = Math.floor(minValue / bestStep) * bestStep;
+        const roundedMax = Math.ceil(maxValue / bestStep) * bestStep;
+        const actualTickCount = Math.round((roundedMax - roundedMin) / bestStep) + 1;
+
+        for (let i = 0; i < actualTickCount; i++) {
+          const value = roundedMin + i * bestStep;
+          if (value >= minValue && value <= maxValue) { // Solo mostrar ticks dentro del rango de datos
+            const y = yScale(value);
+            axesHtml += `<line x1="${margin.left - 5}" y1="${y}" x2="${margin.left}" y2="${y}" stroke="var(--border-color)" />`;
+            axesHtml += `<text x="${margin.left - 10}" y="${y + 4}" text-anchor="end" fill="var(--text-primary)" font-size="12">${formatNumber(value)}</text>`;
+          }
         }
 
         html += `<div class="group-title">Evolución Anual</div>
@@ -1328,8 +1352,9 @@ async function showGlobalReturns() {
               <div class="dividend-line"><strong>${year}:</strong></div>
               <div class="dividend-line">Dividendos: <strong>${formatCurrency(yearData.dividend)}</strong></div>
               <div class="dividend-line">Intereses: <strong>${formatCurrency(yearData.interest)}</strong></div>
-              <div class="dividend-line">Ventas: <strong>${formatCurrency(yearData.sale)}</strong></div> <!-- CORREGIDO -->
-              <div class="dividend-line"><strong>Total: ${formatCurrency(yearData.total)}</strong></div>
+              <div class="dividend-line">Ventas: <strong>${formatCurrency(yearData.sale)}</strong></div>
+              <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0;"> <!-- NUEVO: Línea divisoria -->
+              <div class="dividend-line"><strong>Total:</strong> <strong style="text-align: right; float: right;">${formatCurrency(yearData.total)}</strong></div> <!-- NUEVO: Alineado a la derecha -->
              </div>`;
   }
 
@@ -1472,21 +1497,20 @@ function showHelp() {
     <p>Aplicación PWA para gestionar tus cuentas bancarias y sus rendimientos.</p>
     <h4>✅ Funcionalidades</h4>
     <ul>
-      <li>🏦 Gestión de cuentas (titular, saldo, entidad, número)</li>
+      <li>🏦 Gestión de cuentas (titular, saldo, entidad)</li>
       <li>🏷️ Identificación de cuentas de valores</li>
       <li>🎨 Asignación de color a tarjetas</li>
       <li>🔄 Reordenar cuentas con arrastrar y soltar</li>
       <li>💰 Registro de rendimientos: intereses y dividendos</li>
       <li>📊 Rendimientos con desglose anual visible</li>
-      <li>📊 Dividendos mostrados en bruto</li>
-      <li>📊 Separación de saldos: Cuentas y Valores</li>
-      <li>🔄 Sin movimientos: solo rendimientos con fecha</li>
       <li>📈 Visualización de rendimiento global</li>
       <li>📤 Exportar a JSON</li>
       <li>🌙 Tema claro/oscuro</li>
     </ul>
     <h4>🔒 Privacidad</h4>
-    <p>Tus datos <strong>se guardan solo en tu dispositivo</strong>.</p>
+    <p style="margin-top:20px; font-size:0.9rem; color:#666;">
+      Desarrollado por JJ Sierra – 2025
+    </p>
   `;
   openModal('Ayuda', content);
 }
